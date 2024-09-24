@@ -32,33 +32,31 @@ impl CPU {
                     // Clear zero and negative flags
                     self.status &= 0b0111_1101;
 
-                    if self.register_a == 0 {
-                        self.status |= 0b0000_0010;
-                    }
-
-                    if self.register_a & 0b1000_0000 != 0 {
-                        self.status |= 0b1000_0000;
-                    }
+                    self.set_zero_and_negative_flags(self.register_a);
                 }
                 0xAA => {
                     self.register_x = self.register_a;
 
-                    // Clear zero and negative flags
-                    self.status &= 0b0111_1101;
-
-                    if self.register_x == 0 {
-                        self.status |= 0b0000_0010;
-                    }
-
-                    if self.register_x & 0b1000_0000 != 0 {
-                        self.status |= 0b1000_0000;
-                    }
+                    self.set_zero_and_negative_flags(self.register_x);
                 }
                 0x00 => {
                     return;
                 }
                 _ => todo!(),
             }
+        }
+    }
+
+    fn set_zero_and_negative_flags(&mut self, register: u8) {
+        // Clear zero and negative flags
+        self.status &= 0b0111_1101;
+
+        if register == 0 {
+            self.status |= 0b0000_0010;
+        }
+
+        if register & 0b1000_0000 != 0 {
+            self.status |= 0b1000_0000;
         }
     }
 }
