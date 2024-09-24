@@ -39,6 +39,11 @@ impl CPU {
 
                     self.set_zero_and_negative_flags(self.register_x);
                 }
+                0xE8 => {
+                    self.register_x = self.register_x.wrapping_add(1);
+
+                    self.set_zero_and_negative_flags(self.register_x);
+                }
                 0x00 => {
                     return;
                 }
@@ -110,5 +115,40 @@ mod test {
         cpu.register_a = 0xf5;
         cpu.interpret(vec![0xaa, 0x00]);
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
+    }
+
+    #[test]
+    fn test_0xe8_inx_opcode() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0x05;
+        cpu.interpret(vec![0xe8, 0x00]);
+        assert_eq!(cpu.register_x, 0x06);
+        assert!(cpu.status & 0b1000_0010 == 0);
+    }
+
+    #[test]
+    fn test_0xe8_inx_opcode_zero_flag_set_with_overflow() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xff;
+        cpu.interpret(vec![0xe8, 0x00]);
+        assert_eq!(cpu.register_x, 0x00);
+        assert!(cpu.status & 0b0000_0010 == 0b10);
+    }
+
+    #[test]
+    fn test_0xe8_inx_opcode_negative_flag_set() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xf5;
+        cpu.interpret(vec![0xe8, 0x00]);
+        assert_eq!(cpu.register_x, 0xf6);
+        assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
+    }
+
+    #[test]
+    fn test_opcode_combination() {
+        let mut cpu = CPU::new();
+        cpu.interpret(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
+
+        assert_eq!(cpu.register_x, 0xc1)
     }
 }
