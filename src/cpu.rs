@@ -39,11 +39,20 @@ impl CPU {
 
     fn load(&mut self, program: Vec<u8>) {
         self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program);
-        self.program_counter = 0x8000;
+        self.mem_write_u16(0xFFFC, 0x8000);
+    }
+
+    fn reset(&mut self) {
+        self.register_a = 0;
+        self.register_x = 0;
+        self.status = 0;
+
+        self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
     fn run(&mut self, program: Vec<u8>) {
         self.load(program);
+        self.reset();
         self.interpret();
     }
 
@@ -124,8 +133,10 @@ mod test {
     #[test]
     fn test_0xaa_tax_opcode() {
         let mut cpu = CPU::new();
+        cpu.load(vec![0xaa, 0x00]);
+        cpu.reset();
         cpu.register_a = 0x05;
-        cpu.run(vec![0xaa, 0x00]);
+        cpu.interpret();
         assert_eq!(cpu.register_x, 0x05);
         assert!(cpu.status & 0b1000_0010 == 0);
     }
@@ -133,24 +144,30 @@ mod test {
     #[test]
     fn test_0xaa_tax_opcode_zero_flag_set() {
         let mut cpu = CPU::new();
+        cpu.load(vec![0xaa, 0x00]);
+        cpu.reset();
         cpu.register_a = 0x00;
-        cpu.run(vec![0xaa, 0x00]);
+        cpu.interpret();
         assert!(cpu.status & 0b0000_0010 == 0b10);
     }
 
     #[test]
     fn test_0xaa_tax_opcode_negative_flag_set() {
         let mut cpu = CPU::new();
+        cpu.load(vec![0xaa, 0x00]);
+        cpu.reset();
         cpu.register_a = 0xf5;
-        cpu.run(vec![0xaa, 0x00]);
+        cpu.interpret();
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
     }
 
     #[test]
     fn test_0xe8_inx_opcode() {
         let mut cpu = CPU::new();
+        cpu.load(vec![0xe8, 0x00]);
+        cpu.reset();
         cpu.register_x = 0x05;
-        cpu.run(vec![0xe8, 0x00]);
+        cpu.interpret();
         assert_eq!(cpu.register_x, 0x06);
         assert!(cpu.status & 0b1000_0010 == 0);
     }
@@ -158,8 +175,10 @@ mod test {
     #[test]
     fn test_0xe8_inx_opcode_zero_flag_set_with_overflow() {
         let mut cpu = CPU::new();
+        cpu.load(vec![0xe8, 0x00]);
+        cpu.reset();
         cpu.register_x = 0xff;
-        cpu.run(vec![0xe8, 0x00]);
+        cpu.interpret();
         assert_eq!(cpu.register_x, 0x00);
         assert!(cpu.status & 0b0000_0010 == 0b10);
     }
@@ -167,8 +186,10 @@ mod test {
     #[test]
     fn test_0xe8_inx_opcode_negative_flag_set() {
         let mut cpu = CPU::new();
+        cpu.load(vec![0xe8, 0x00]);
+        cpu.reset();
         cpu.register_x = 0xf5;
-        cpu.run(vec![0xe8, 0x00]);
+        cpu.interpret();
         assert_eq!(cpu.register_x, 0xf6);
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
     }
@@ -220,6 +241,6 @@ mod test {
         assert_eq!(cpu.memory[0x8002], 0xaa);
         assert_eq!(cpu.memory[0x8003], 0xe8);
         assert_eq!(cpu.memory[0x8004], 0x00);
-        assert_eq!(cpu.program_counter, 0x8000);
+        assert_eq!(cpu.mem_read_u16(0xFFFC), 0x8000);
     }
 }
