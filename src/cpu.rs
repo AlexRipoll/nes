@@ -45,9 +45,9 @@ impl CPU {
     }
 
     fn mem_read_u16(&self, address: u16) -> u16 {
-        let lo = self.mem_read(address) as u16;
-        let hi = self.mem_read(address + 1) as u16;
-        (hi << 8) | (lo as u16)
+        let lsb = self.mem_read(address) as u16;
+        let msb = self.mem_read(address + 1) as u16;
+        (msb << 8) | (lsb as u16)
     }
 
     fn mem_write_u16(&mut self, address: u16, data: u16) {
@@ -82,6 +82,34 @@ impl CPU {
             match opcode {
                 0xA9 => {
                     self.lda(&AddressingMode::Immediate);
+                    self.program_counter += 1;
+                }
+                0xA5 => {
+                    self.lda(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
+                0xB5 => {
+                    self.lda(&AddressingMode::ZeroPage_X);
+                    self.program_counter += 1;
+                }
+                0xAD => {
+                    self.lda(&AddressingMode::Absolute);
+                    self.program_counter += 2;
+                }
+                0xBD => {
+                    self.lda(&AddressingMode::Absolute_X);
+                    self.program_counter += 2;
+                }
+                0xB9 => {
+                    self.lda(&AddressingMode::Absolute_Y);
+                    self.program_counter += 2;
+                }
+                0xA1 => {
+                    self.lda(&AddressingMode::Indirect_X);
+                    self.program_counter += 1;
+                }
+                0xB1 => {
+                    self.lda(&AddressingMode::Indirect_Y);
                     self.program_counter += 1;
                 }
                 0xAA => {
@@ -126,6 +154,7 @@ impl CPU {
             AddressingMode::Absolute_Y => {
                 let operand = self.mem_read_u16(self.program_counter);
                 let address = operand.wrapping_add(self.register_y as u16);
+                println!("==> {:X}", address);
                 address
             }
             AddressingMode::Indirect => {
@@ -207,6 +236,107 @@ mod test {
         let mut cpu = CPU::new();
         cpu.run(vec![0xa9, 0xf0, 0x00]);
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
+    }
+
+    #[test]
+    fn test_0xa5_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x05, 0x7a);
+        cpu.run(vec![0xa5, 0x05, 0x00]);
+        assert_eq!(cpu.register_a, 0x7a);
+    }
+
+    #[test]
+    fn test_0xb5_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x16, 0x7a);
+        cpu.load(vec![0xb5, 0x12, 0x00]);
+        cpu.reset();
+        cpu.register_x = 0x04;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x7a);
+    }
+
+    #[test]
+    fn test_0xad_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0xaa12, 0x7a);
+        cpu.run(vec![0xad, 0x12, 0xaa, 0x00]);
+        assert_eq!(cpu.register_a, 0x7a);
+    }
+
+    #[test]
+    fn test_0xbd_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0xaa16, 0x7a);
+        cpu.load(vec![0xbd, 0x12, 0xaa, 0x00]);
+        cpu.reset();
+        cpu.register_x = 0x04;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x7a);
+    }
+
+    #[test]
+    fn test_0xb9_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0xaa16, 0x7a);
+        cpu.load(vec![0xb9, 0x12, 0xaa, 0x00]);
+        cpu.reset();
+        cpu.register_y = 0x04;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x7a);
+    }
+
+    #[test]
+    fn test_0xa1_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x16, 0x07);
+        cpu.mem_write(0x17, 0x1a);
+        cpu.mem_write(0x1a07, 0x33);
+        cpu.load(vec![0xa1, 0x12, 0x00]);
+        cpu.reset();
+        cpu.register_x = 0x04;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x33);
+    }
+
+    #[test]
+    fn test_0xa1_lda_opcode_wrapping_overflow() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x01, 0xee);
+        cpu.mem_write(0x02, 0x12);
+        cpu.mem_write(0x12ee, 0x33);
+        cpu.load(vec![0xa1, 0x02, 0x00]);
+        cpu.reset();
+        cpu.register_x = 0xff;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x33);
+    }
+
+    #[test]
+    fn test_0xb1_lda_opcode() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x12, 0x07);
+        cpu.mem_write(0x13, 0x1a);
+        cpu.mem_write(0x1a0b, 0x33);
+        cpu.load(vec![0xb1, 0x12, 0x00]);
+        cpu.reset();
+        cpu.register_y = 0x04;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x33);
+    }
+
+    #[test]
+    fn test_0xb1_lda_opcode_wrapping_overflow() {
+        let mut cpu = CPU::new();
+        cpu.mem_write(0x12, 0xff);
+        cpu.mem_write(0x13, 0xff);
+        cpu.mem_write(0x01, 0x33);
+        cpu.load(vec![0xb1, 0x12, 0x00]);
+        cpu.reset();
+        cpu.register_y = 0x02;
+        cpu.interpret();
+        assert_eq!(cpu.register_a, 0x33);
     }
 
     #[test]
