@@ -2,9 +2,26 @@
 struct CPU {
     register_a: u8,
     register_x: u8,
+    register_y: u8,
     status: u8,
     program_counter: u16,
     memory: [u8; 0xFFFF],
+}
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub enum AddressingMode {
+    Immediate,
+    ZeroPage,
+    ZeroPage_X,
+    ZeroPage_Y,
+    Absolute,
+    Absolute_X,
+    Absolute_Y,
+    Indirect,
+    Indirect_X,
+    Indirect_Y,
+    NoneAddressing,
 }
 
 impl CPU {
@@ -12,6 +29,7 @@ impl CPU {
         CPU {
             register_a: 0,
             register_x: 0,
+            register_y: 0,
             status: 0,
             program_counter: 0,
             memory: [0u8; 0xFFFF],
@@ -63,14 +81,8 @@ impl CPU {
 
             match opcode {
                 0xA9 => {
-                    let parameter = self.mem_read(self.program_counter);
+                    self.lda(&AddressingMode::Immediate);
                     self.program_counter += 1;
-                    self.register_a = parameter;
-
-                    // Clear zero and negative flags
-                    self.status &= 0b0111_1101;
-
-                    self.set_zero_and_negative_flags(self.register_a);
                 }
                 0xAA => {
                     self.register_x = self.register_a;
@@ -90,6 +102,62 @@ impl CPU {
         }
     }
 
+    /// Read bout Addressing Modes implementations: https://www.nesdev.org/obelisk-6502-guide/addressing.html
+    fn operand_address(&self, mode: &AddressingMode) -> u16 {
+        match mode {
+            AddressingMode::Immediate => self.program_counter,
+            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
+            AddressingMode::ZeroPage_X => {
+                let operand = self.mem_read(self.program_counter);
+                let address = operand.wrapping_add(self.register_x) as u16;
+                address
+            }
+            AddressingMode::ZeroPage_Y => {
+                let operand = self.mem_read(self.program_counter);
+                let address = operand.wrapping_add(self.register_y) as u16;
+                address
+            }
+            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
+            AddressingMode::Absolute_X => {
+                let operand = self.mem_read_u16(self.program_counter);
+                let address = operand.wrapping_add(self.register_x as u16);
+                address
+            }
+            AddressingMode::Absolute_Y => {
+                let operand = self.mem_read_u16(self.program_counter);
+                let address = operand.wrapping_add(self.register_y as u16);
+                address
+            }
+            AddressingMode::Indirect => {
+                let operand = self.mem_read(self.program_counter);
+
+                let lsb = self.mem_read(operand as u16);
+                let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
+                (msb as u16) << 8 | (lsb as u16)
+            }
+            AddressingMode::Indirect_X => {
+                let operand = self.mem_read(self.program_counter);
+
+                let ptr: u8 = (operand as u8).wrapping_add(self.register_x);
+                let lsb = self.mem_read(ptr as u16);
+                let msb = self.mem_read(ptr.wrapping_add(1) as u16);
+                (msb as u16) << 8 | (lsb as u16)
+            }
+            AddressingMode::Indirect_Y => {
+                let operand = self.mem_read(self.program_counter);
+
+                let lsb = self.mem_read(operand as u16);
+                let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
+                let address = (msb as u16) << 8 | (lsb as u16);
+                let address = address.wrapping_add(self.register_y as u16);
+                address
+            }
+            AddressingMode::NoneAddressing => {
+                panic!("mode {:?} is not supported", mode);
+            }
+        }
+    }
+
     fn set_zero_and_negative_flags(&mut self, register: u8) {
         // Clear zero and negative flags
         self.status &= 0b0111_1101;
@@ -101,6 +169,17 @@ impl CPU {
         if register & 0b1000_0000 != 0 {
             self.status |= 0b1000_0000;
         }
+    }
+
+    fn lda(&mut self, mode: &AddressingMode) {
+        let address = self.operand_address(mode);
+        let value = self.mem_read(address);
+        self.register_a = value;
+
+        // Clear zero and negative flags
+        self.status &= 0b0111_1101;
+
+        self.set_zero_and_negative_flags(self.register_a);
     }
 }
 
