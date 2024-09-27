@@ -12,6 +12,7 @@ pub struct Instruction {
 #[derive(Debug)]
 enum Mnemonic {
     ADC,
+    AND,
     LDA,
     STA,
     TAX,
@@ -91,6 +92,63 @@ impl From<u8> for Instruction {
             0x71 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::ADC,
+                mode: AddressingMode::Indirect_Y,
+                size: 2,
+                cycles: 5,
+            },
+            // AND
+            0x29 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::Immediate,
+                size: 2,
+                cycles: 2,
+            },
+            0x25 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 3,
+            },
+            0x35 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 4,
+            },
+            0x2D => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 4,
+            },
+            0x3D => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 4,
+            },
+            0x39 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::Absolute_Y,
+                size: 3,
+                cycles: 4,
+            },
+            0x21 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
+                mode: AddressingMode::Indirect_X,
+                size: 2,
+                cycles: 6,
+            },
+            0x31 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::AND,
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 5,

@@ -78,6 +78,10 @@ impl CPU {
                 0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
                     self.adc(opcode);
                 }
+                // AND
+                0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
+                    self.and(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -216,8 +220,8 @@ impl CPU {
     fn adc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
-        let data = self.mem_read(address);
-        let res = self.register_a as u16 + data as u16 + (self.status & 0b0000_0001) as u16;
+        let operand = self.mem_read(address);
+        let res = self.register_a as u16 + operand as u16 + (self.status & 0b0000_0001) as u16;
 
         // set Carry flag
         if res > 255 {
@@ -234,7 +238,7 @@ impl CPU {
         }
 
         // set Overflow flag
-        if (data ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0 {
+        if (operand ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0 {
             self.status |= 0b0100_0000;
         } else {
             self.status &= 0b1011_1111;
@@ -248,6 +252,18 @@ impl CPU {
         }
 
         self.register_a = res as u8;
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn and(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        self.register_a &= operand;
+
+        self.set_zero_and_negative_flags(self.register_a);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -578,5 +594,47 @@ mod test {
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
         assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
         assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+    }
+
+    #[test]
+    fn test_and_immediate() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x29, 0b10101010]); // AND Immediate with 0xAA
+        cpu.reset();
+        cpu.register_a = 0b11001100; // A = 0xCC (204 in decimal)
+
+        cpu.interpret(); // Execute AND instruction
+
+        assert_eq!(cpu.register_a, 0b10001000); // A should now be 0x88 (136 in decimal)
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear (result is not zero)
+        assert_eq!(cpu.status & 0b1000_0000, 0b1000_0000); // Negative flag should be clear (most significant bit is 1)
+    }
+
+    #[test]
+    fn test_and_zero_result() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x29, 0b00110011]); // AND Immediate with 0x33
+        cpu.reset();
+        cpu.register_a = 0b11001100; // A = 0xCC (204 in decimal)
+
+        cpu.interpret(); // Execute AND instruction
+
+        assert_eq!(cpu.register_a, 0); // A should now be 0x00
+        assert_eq!(cpu.status & 0b0000_0010, 0b0000_0010); // Zero flag should be set (result is zero)
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear (most significant bit is 0)
+    }
+
+    #[test]
+    fn test_and_negative_result() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x29, 0b10101010]); // AND Immediate with 0xAA
+        cpu.reset();
+        cpu.register_a = 0b11110000; // A = 0xF0 (240 in decimal, negative in two's complement)
+
+        cpu.interpret(); // Execute AND instruction
+
+        assert_eq!(cpu.register_a, 0b10100000); // A should now be 0xA0 (160 in decimal)
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear (result is not zero)
+        assert_eq!(cpu.status & 0b1000_0000, 0b1000_0000); // Negative flag should be set (most significant bit is 1)
     }
 }
