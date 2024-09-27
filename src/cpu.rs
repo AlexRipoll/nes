@@ -1,4 +1,12 @@
+use std::u16;
+
 use crate::instruction::{self, AddressingMode, Instruction};
+
+/// Status Flags
+///   7   6   5   4   3   2   1   0
+/// +---+---+---+---+---+---+---+---+
+/// | N | V | - | B | D | I | Z | C |
+/// +---+---+---+---+---+---+---+---+
 
 #[derive(Debug)]
 struct CPU {
@@ -66,6 +74,10 @@ impl CPU {
             self.program_counter += 1;
 
             match opcode {
+                // ADC
+                0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
+                    self.adc(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -116,7 +128,6 @@ impl CPU {
             AddressingMode::Absolute_Y => {
                 let operand = self.mem_read_u16(self.program_counter);
                 let address = operand.wrapping_add(self.register_y as u16);
-                println!("==> {:X}", address);
                 Some(address)
             }
             AddressingMode::Indirect => {
@@ -198,6 +209,45 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_x.wrapping_add(1);
         self.set_zero_and_negative_flags(self.register_x);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn adc(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let data = self.mem_read(address);
+        let res = self.register_a as u16 + data as u16 + (self.status & 0b0000_0001) as u16;
+
+        // set Carry flag
+        if res > 255 {
+            self.status |= 0b0000_0001;
+        } else {
+            self.status &= 0b1111_1110;
+        }
+
+        // set Zero flag
+        if res as u8 == 0 {
+            self.status |= 0b0000_0010;
+        } else {
+            self.status &= 0b1111_1101;
+        }
+
+        // set Overflow flag
+        if (data ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0 {
+            self.status |= 0b0100_0000;
+        } else {
+            self.status &= 0b1011_1111;
+        }
+
+        // set Negative flag
+        if res as u8 & 0x80 != 0 {
+            self.status |= 0b1000_0000;
+        } else {
+            self.status &= 0b0111_1111;
+        }
+
+        self.register_a = res as u8;
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -442,5 +492,91 @@ mod test {
         assert_eq!(cpu.memory[0x8003], 0xe8);
         assert_eq!(cpu.memory[0x8004], 0x00);
         assert_eq!(cpu.mem_read_u16(0xFFFC), 0x8000);
+    }
+
+    #[test]
+    fn test_adc_no_carry() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x69, 20]);
+        cpu.reset();
+        cpu.register_a = 10; // A = 10
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 30); // A should be 10 + 20 = 30
+        assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+    }
+
+    #[test]
+    fn test_adc_with_carry() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x69, 100]);
+        cpu.reset();
+        cpu.register_a = 200;
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 44); // A should be (200 + 100) % 256 = 44
+        assert_eq!(cpu.status & 0b0000_0001, 1); // Carry flag should be set
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+    }
+
+    #[test]
+    fn test_adc_zero_result() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x69, 126]);
+        cpu.reset();
+        cpu.register_a = 130;
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 0); // A should be 130 + 126 = 0 (256 -> wrapped to 0)
+        assert_eq!(cpu.status & 0b0000_0001, 1); // Carry flag should be set
+        assert_eq!(cpu.status & 0b0000_0010, 0b10); // Zero flag should be set
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+    }
+
+    #[test]
+    fn test_adc_overflow() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x69, 1]);
+        cpu.reset();
+        cpu.register_a = 127; // A = 127 (positive)
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 128); // A should be 128 (negative in two's complement)
+        assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
+        assert_eq!(cpu.status & 0b0100_0000, 0b0100_0000); // Overflow flag should be set
+        assert_eq!(cpu.status & 0b1000_0000, 0b1000_0000); // Negative flag should be set
+    }
+
+    #[test]
+    fn test_adc_negative() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x69, 0x80]);
+        cpu.reset();
+        cpu.register_a = 0x80; // A = 128 (negative in two's complement)
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 0); // A should wrap to 0
+        assert_eq!(cpu.status & 0b0000_0001, 1); // Carry flag should be set
+        assert_eq!(cpu.status & 0b0100_0000, 0b0100_0000); // Overflow flag should be set
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+        assert_eq!(cpu.status & 0b0000_0010, 0b0000_0010); // Zero flag should be set
+    }
+
+    #[test]
+    fn test_adc_with_initial_carry() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0x69, 10]);
+        cpu.reset();
+        cpu.status = 0b0000_0001; // Set the carry flag to 1
+        cpu.register_a = 5;
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 16); // A should be 5 + 10 + 1 (carry) = 16
+        assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
     }
 }
