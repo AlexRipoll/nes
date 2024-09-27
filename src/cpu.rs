@@ -24,6 +24,20 @@ pub enum AddressingMode {
     NoneAddressing,
 }
 
+#[derive(Debug)]
+enum Opcode {
+    LDA,
+    STA,
+}
+
+#[derive(Debug)]
+struct Instruction {
+    opcode: Opcode,
+    mode: AddressingMode,
+    size: u8,
+    cycles: u8,
+}
+
 impl CPU {
     fn new() -> Self {
         CPU {
@@ -80,6 +94,7 @@ impl CPU {
             self.program_counter += 1;
 
             match opcode {
+                // LDA
                 0xA9 => {
                     self.lda(&AddressingMode::Immediate);
                     self.program_counter += 1;
@@ -112,6 +127,36 @@ impl CPU {
                     self.lda(&AddressingMode::Indirect_Y);
                     self.program_counter += 1;
                 }
+                //STA
+                0x85 => {
+                    self.sta(&AddressingMode::ZeroPage);
+                    self.program_counter += 1;
+                }
+                0x95 => {
+                    self.sta(&AddressingMode::ZeroPage_X);
+                    self.program_counter += 1;
+                }
+                0x8D => {
+                    self.sta(&AddressingMode::Absolute);
+                    self.program_counter += 2;
+                }
+                0x9D => {
+                    self.sta(&AddressingMode::Absolute_X);
+                    self.program_counter += 2;
+                }
+                0x99 => {
+                    self.sta(&AddressingMode::Absolute_Y);
+                    self.program_counter += 2;
+                }
+                0x81 => {
+                    self.sta(&AddressingMode::Indirect_X);
+                    self.program_counter += 1;
+                }
+                0x91 => {
+                    self.sta(&AddressingMode::Indirect_Y);
+                    self.program_counter += 1;
+                }
+                //
                 0xAA => {
                     self.register_x = self.register_a;
 
@@ -209,6 +254,11 @@ impl CPU {
         self.status &= 0b0111_1101;
 
         self.set_zero_and_negative_flags(self.register_a);
+    }
+
+    fn sta(&mut self, mode: &AddressingMode) {
+        let address = self.operand_address(mode);
+        self.mem_write(address, self.register_a);
     }
 }
 
