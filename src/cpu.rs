@@ -70,14 +70,13 @@ impl CPU {
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
                 }
-                //STA
+                // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
                 }
+                // TAX
                 0xAA => {
-                    self.register_x = self.register_a;
-
-                    self.set_zero_and_negative_flags(self.register_x);
+                    self.tax(opcode);
                 }
                 0xE8 => {
                     self.register_x = self.register_x.wrapping_add(1);
@@ -93,38 +92,39 @@ impl CPU {
     }
 
     /// Read bout Addressing Modes implementations: https://www.nesdev.org/obelisk-6502-guide/addressing.html
-    fn operand_address(&self, mode: &AddressingMode) -> u16 {
+    fn operand_address(&self, mode: &AddressingMode) -> Option<u16> {
         match mode {
-            AddressingMode::Immediate => self.program_counter,
-            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
+            AddressingMode::Implied => None,
+            AddressingMode::Immediate => Some(self.program_counter),
+            AddressingMode::ZeroPage => Some(self.mem_read(self.program_counter) as u16),
             AddressingMode::ZeroPage_X => {
                 let operand = self.mem_read(self.program_counter);
                 let address = operand.wrapping_add(self.register_x) as u16;
-                address
+                Some(address)
             }
             AddressingMode::ZeroPage_Y => {
                 let operand = self.mem_read(self.program_counter);
                 let address = operand.wrapping_add(self.register_y) as u16;
-                address
+                Some(address)
             }
-            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
+            AddressingMode::Absolute => Some(self.mem_read_u16(self.program_counter)),
             AddressingMode::Absolute_X => {
                 let operand = self.mem_read_u16(self.program_counter);
                 let address = operand.wrapping_add(self.register_x as u16);
-                address
+                Some(address)
             }
             AddressingMode::Absolute_Y => {
                 let operand = self.mem_read_u16(self.program_counter);
                 let address = operand.wrapping_add(self.register_y as u16);
                 println!("==> {:X}", address);
-                address
+                Some(address)
             }
             AddressingMode::Indirect => {
                 let operand = self.mem_read(self.program_counter);
 
                 let lsb = self.mem_read(operand as u16);
                 let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
-                (msb as u16) << 8 | (lsb as u16)
+                Some((msb as u16) << 8 | (lsb as u16))
             }
             AddressingMode::Indirect_X => {
                 let operand = self.mem_read(self.program_counter);
@@ -132,7 +132,7 @@ impl CPU {
                 let ptr: u8 = (operand as u8).wrapping_add(self.register_x);
                 let lsb = self.mem_read(ptr as u16);
                 let msb = self.mem_read(ptr.wrapping_add(1) as u16);
-                (msb as u16) << 8 | (lsb as u16)
+                Some((msb as u16) << 8 | (lsb as u16))
             }
             AddressingMode::Indirect_Y => {
                 let operand = self.mem_read(self.program_counter);
@@ -141,7 +141,7 @@ impl CPU {
                 let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
                 let address = (msb as u16) << 8 | (lsb as u16);
                 let address = address.wrapping_add(self.register_y as u16);
-                address
+                Some(address)
             }
             AddressingMode::NoneAddressing => {
                 panic!("mode {:?} is not supported", mode);
@@ -161,10 +161,12 @@ impl CPU {
             self.status |= 0b1000_0000;
         }
     }
+}
 
+impl CPU {
     fn lda(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let address = self.operand_address(&instruction.mode).unwrap();
         let value = self.mem_read(address);
         self.register_a = value;
 
@@ -178,8 +180,17 @@ impl CPU {
 
     fn sta(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let address = self.operand_address(&instruction.mode).unwrap();
         self.mem_write(address, self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn tax(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_x = self.register_a;
+
+        self.set_zero_and_negative_flags(self.register_x);
 
         self.program_counter += instruction.size as u16 - 1;
     }

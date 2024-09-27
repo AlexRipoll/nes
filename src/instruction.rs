@@ -13,11 +13,13 @@ pub struct Instruction {
 enum Mnemonic {
     LDA,
     STA,
+    TAX,
 }
 
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
+    Implied,
     Immediate,
     ZeroPage,
     ZeroPage_X,
@@ -140,6 +142,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 6,
+            },
+            // TAX
+            0xAA => Instruction {
+                opcode,
+                mnemonic: Mnemonic::TAX,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
             },
             _ => panic!("Unknown opcode {}", opcode),
         }
