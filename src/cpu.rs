@@ -1,3 +1,5 @@
+use crate::instruction::{self, AddressingMode, Instruction};
+
 #[derive(Debug)]
 struct CPU {
     register_a: u8,
@@ -6,36 +8,6 @@ struct CPU {
     status: u8,
     program_counter: u16,
     memory: [u8; 0xFFFF],
-}
-
-#[derive(Debug)]
-#[allow(non_camel_case_types)]
-pub enum AddressingMode {
-    Immediate,
-    ZeroPage,
-    ZeroPage_X,
-    ZeroPage_Y,
-    Absolute,
-    Absolute_X,
-    Absolute_Y,
-    Indirect,
-    Indirect_X,
-    Indirect_Y,
-    NoneAddressing,
-}
-
-#[derive(Debug)]
-enum Opcode {
-    LDA,
-    STA,
-}
-
-#[derive(Debug)]
-struct Instruction {
-    opcode: Opcode,
-    mode: AddressingMode,
-    size: u8,
-    cycles: u8,
 }
 
 impl CPU {
@@ -95,68 +67,13 @@ impl CPU {
 
             match opcode {
                 // LDA
-                0xA9 => {
-                    self.lda(&AddressingMode::Immediate);
-                    self.program_counter += 1;
-                }
-                0xA5 => {
-                    self.lda(&AddressingMode::ZeroPage);
-                    self.program_counter += 1;
-                }
-                0xB5 => {
-                    self.lda(&AddressingMode::ZeroPage_X);
-                    self.program_counter += 1;
-                }
-                0xAD => {
-                    self.lda(&AddressingMode::Absolute);
-                    self.program_counter += 2;
-                }
-                0xBD => {
-                    self.lda(&AddressingMode::Absolute_X);
-                    self.program_counter += 2;
-                }
-                0xB9 => {
-                    self.lda(&AddressingMode::Absolute_Y);
-                    self.program_counter += 2;
-                }
-                0xA1 => {
-                    self.lda(&AddressingMode::Indirect_X);
-                    self.program_counter += 1;
-                }
-                0xB1 => {
-                    self.lda(&AddressingMode::Indirect_Y);
-                    self.program_counter += 1;
+                0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
+                    self.lda(opcode);
                 }
                 //STA
-                0x85 => {
-                    self.sta(&AddressingMode::ZeroPage);
-                    self.program_counter += 1;
+                0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
+                    self.sta(opcode);
                 }
-                0x95 => {
-                    self.sta(&AddressingMode::ZeroPage_X);
-                    self.program_counter += 1;
-                }
-                0x8D => {
-                    self.sta(&AddressingMode::Absolute);
-                    self.program_counter += 2;
-                }
-                0x9D => {
-                    self.sta(&AddressingMode::Absolute_X);
-                    self.program_counter += 2;
-                }
-                0x99 => {
-                    self.sta(&AddressingMode::Absolute_Y);
-                    self.program_counter += 2;
-                }
-                0x81 => {
-                    self.sta(&AddressingMode::Indirect_X);
-                    self.program_counter += 1;
-                }
-                0x91 => {
-                    self.sta(&AddressingMode::Indirect_Y);
-                    self.program_counter += 1;
-                }
-                //
                 0xAA => {
                     self.register_x = self.register_a;
 
@@ -245,8 +162,9 @@ impl CPU {
         }
     }
 
-    fn lda(&mut self, mode: &AddressingMode) {
-        let address = self.operand_address(mode);
+    fn lda(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_a = value;
 
@@ -254,11 +172,16 @@ impl CPU {
         self.status &= 0b0111_1101;
 
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
     }
 
-    fn sta(&mut self, mode: &AddressingMode) {
-        let address = self.operand_address(mode);
+    fn sta(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
     }
 }
 
