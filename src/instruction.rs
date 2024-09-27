@@ -14,6 +14,7 @@ enum Mnemonic {
     LDA,
     STA,
     TAX,
+    INC,
 }
 
 #[derive(Debug)]
@@ -147,6 +148,14 @@ impl From<u8> for Instruction {
             0xAA => Instruction {
                 opcode,
                 mnemonic: Mnemonic::TAX,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
+            },
+            // INC
+            0xE8 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INC,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,

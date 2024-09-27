@@ -78,11 +78,11 @@ impl CPU {
                 0xAA => {
                     self.tax(opcode);
                 }
+                // INC
                 0xE8 => {
-                    self.register_x = self.register_x.wrapping_add(1);
-
-                    self.set_zero_and_negative_flags(self.register_x);
+                    self.inc(opcode);
                 }
+                // BRK
                 0x00 => {
                     return;
                 }
@@ -189,7 +189,14 @@ impl CPU {
     fn tax(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_a;
+        self.set_zero_and_negative_flags(self.register_x);
 
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn inc(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_x = self.register_x.wrapping_add(1);
         self.set_zero_and_negative_flags(self.register_x);
 
         self.program_counter += instruction.size as u16 - 1;
