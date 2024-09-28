@@ -19,6 +19,12 @@ pub enum StatusFlag {
     Negative = 0b1000_0000,
 }
 
+impl StatusFlag {
+    pub fn to_mask(self) -> u8 {
+        self as u8
+    }
+}
+
 #[derive(Debug)]
 struct CPU {
     register_a: u8,
@@ -42,11 +48,11 @@ impl CPU {
     }
 
     fn set_flag(&mut self, flag: StatusFlag) {
-        self.status |= flag as u8;
+        self.status |= flag.to_mask();
     }
 
     fn clear_flag(&mut self, flag: StatusFlag) {
-        self.status &= !(flag as u8);
+        self.status &= !flag.to_mask();
     }
 
     fn mem_read(&self, address: u16) -> u8 {
@@ -191,14 +197,15 @@ impl CPU {
 
     fn set_zero_and_negative_flags(&mut self, register: u8) {
         // Clear zero and negative flags
-        self.status &= 0b0111_1101;
+        self.clear_flag(StatusFlag::Zero);
+        self.clear_flag(StatusFlag::Negative);
 
         if register == 0 {
-            self.status |= 0b0000_0010;
+            self.set_flag(StatusFlag::Zero);
         }
 
-        if register & 0b1000_0000 != 0 {
-            self.status |= 0b1000_0000;
+        if register & StatusFlag::Negative.to_mask() != 0 {
+            self.set_flag(StatusFlag::Negative);
         }
     }
 }
@@ -209,9 +216,6 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
         let value = self.mem_read(address);
         self.register_a = value;
-
-        // Clear zero and negative flags
-        self.status &= 0b0111_1101;
 
         self.set_zero_and_negative_flags(self.register_a);
 
@@ -246,34 +250,36 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
         let operand = self.mem_read(address);
-        let res = self.register_a as u16 + operand as u16 + (self.status & 0b0000_0001) as u16;
+        let res = self.register_a as u16
+            + operand as u16
+            + (self.status & StatusFlag::Carry.to_mask()) as u16;
 
         // set Carry flag
         if res > 255 {
-            self.status |= 0b0000_0001;
+            self.set_flag(StatusFlag::Carry);
         } else {
-            self.status &= 0b1111_1110;
+            self.clear_flag(StatusFlag::Carry);
         }
 
         // set Zero flag
         if res as u8 == 0 {
-            self.status |= 0b0000_0010;
+            self.set_flag(StatusFlag::Zero);
         } else {
-            self.status &= 0b1111_1101;
+            self.clear_flag(StatusFlag::Zero);
         }
 
         // set Overflow flag
         if (operand ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0 {
-            self.status |= 0b0100_0000;
+            self.set_flag(StatusFlag::Overflow);
         } else {
-            self.status &= 0b1011_1111;
+            self.clear_flag(StatusFlag::Overflow);
         }
 
         // set Negative flag
         if res as u8 & 0x80 != 0 {
-            self.status |= 0b1000_0000;
+            self.set_flag(StatusFlag::Negative);
         } else {
-            self.status &= 0b0111_1111;
+            self.clear_flag(StatusFlag::Negative);
         }
 
         self.register_a = res as u8;
@@ -298,9 +304,9 @@ impl CPU {
         match instruction.mode {
             AddressingMode::Accumulator => {
                 if self.register_a & 0b1000_0000 != 0 {
-                    self.status |= 0b0000_0001;
+                    self.set_flag(StatusFlag::Carry);
                 } else {
-                    self.status &= 0b1111_1110;
+                    self.clear_flag(StatusFlag::Carry);
                 }
                 self.register_a = self.register_a << 1;
                 self.set_zero_and_negative_flags(self.register_a);
@@ -310,9 +316,9 @@ impl CPU {
                 let operand = self.mem_read(address);
 
                 if operand & 0b1000_0000 != 0 {
-                    self.status |= 0b0000_0001;
+                    self.set_flag(StatusFlag::Carry);
                 } else {
-                    self.status &= 0b1111_1110;
+                    self.clear_flag(StatusFlag::Carry);
                 }
 
                 let res = operand << 1;
