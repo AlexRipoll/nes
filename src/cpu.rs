@@ -1,3 +1,4 @@
+use core::panic;
 use std::u16;
 
 use crate::instruction::{self, AddressingMode, Instruction};
@@ -70,6 +71,7 @@ impl CPU {
 
     pub fn interpret(&mut self) {
         loop {
+            println!("=>> {:X}", self.program_counter);
             let opcode = self.mem_read(self.program_counter);
             self.program_counter += 1;
 
@@ -81,6 +83,10 @@ impl CPU {
                 // AND
                 0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
                     self.and(opcode);
+                }
+                // ASL
+                0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
+                    self.asl(opcode);
                 }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
@@ -102,7 +108,7 @@ impl CPU {
                 0x00 => {
                     return;
                 }
-                _ => todo!(),
+                _ => panic!("Opcode not supported {:X}", opcode),
             }
         }
     }
@@ -111,6 +117,7 @@ impl CPU {
     fn operand_address(&self, mode: &AddressingMode) -> Option<u16> {
         match mode {
             AddressingMode::Implied => None,
+            AddressingMode::Accumulator => None,
             AddressingMode::Immediate => Some(self.program_counter),
             AddressingMode::ZeroPage => Some(self.mem_read(self.program_counter) as u16),
             AddressingMode::ZeroPage_X => {
@@ -264,6 +271,37 @@ impl CPU {
         self.register_a &= operand;
 
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn asl(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        match instruction.mode {
+            AddressingMode::Accumulator => {
+                if self.register_a & 0b1000_0000 != 0 {
+                    self.status |= 0b0000_0001;
+                } else {
+                    self.status &= 0b1111_1110;
+                }
+                self.register_a = self.register_a << 1;
+                self.set_zero_and_negative_flags(self.register_a);
+            }
+            _ => {
+                let address = self.operand_address(&instruction.mode).unwrap();
+                let operand = self.mem_read(address);
+
+                if operand & 0b1000_0000 != 0 {
+                    self.status |= 0b0000_0001;
+                } else {
+                    self.status &= 0b1111_1110;
+                }
+
+                let res = operand << 1;
+                self.mem_write(address, res);
+                self.set_zero_and_negative_flags(res);
+            }
+        }
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -636,5 +674,110 @@ mod test {
         assert_eq!(cpu.register_a, 0b10100000); // A should now be 0xA0 (160 in decimal)
         assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear (result is not zero)
         assert_eq!(cpu.status & 0b1000_0000, 0b1000_0000); // Negative flag should be set (most significant bit is 1)
+    }
+
+    #[test]
+    fn test_asl_accumulator() {
+        let mut cpu = CPU::new();
+
+        // Load the program: ASL Accumulator (0x0A)
+        // In this case, we shift 0x81 (10000001 in binary) to the left
+        // Expected result: 0x02 (00000010 in binary)
+        // The carry flag should be set because bit 7 was 1
+        // The negative flag should be clear because bit 7 of the result is 0
+        // The zero flag should be clear because the result is not zero
+        cpu.load(vec![0x0A]);
+        cpu.reset();
+        cpu.register_a = 0x81; // Set accumulator to 0x81
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 0x02); // Result after shift
+        assert_eq!(cpu.status & 0b0000_0001, 0b0000_0001); // Carry flag should be set
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+    }
+
+    #[test]
+    fn test_asl_accumulator_zero() {
+        let mut cpu = CPU::new();
+
+        // Load the program: ASL Accumulator (0x0A)
+        // In this case, we shift 0x80 (10000000 in binary) to the left
+        // Expected result: 0x00 (all bits shifted out)
+        // The carry flag should be set because bit 7 was 1
+        // The zero flag should be set because the result is 0
+        // The negative flag should be clear because bit 7 of the result is 0
+        cpu.load(vec![0x0A]);
+        cpu.reset();
+        cpu.register_a = 0x80; // Set accumulator to 0x80
+        cpu.interpret();
+
+        assert_eq!(cpu.register_a, 0x00); // Result after shift
+        assert_eq!(cpu.status & 0b0000_0001, 0b0000_0001); // Carry flag should be set
+        assert_eq!(cpu.status & 0b0000_0010, 0b0000_0010); // Zero flag should be set
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+    }
+
+    #[test]
+    fn test_asl_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load the program: ASL $10 (0x06 0x10)
+        // Shift value at memory location 0x0010, initially set to 0x40 (01000000 in binary)
+        // Expected result: 0x80 (10000000 in binary)
+        // Carry flag should be clear because bit 7 was 0
+        // Negative flag should be set because bit 7 of the result is 1
+        // Zero flag should be clear because the result is not zero
+        cpu.load(vec![0x06, 0x10]); // ASL $10
+        cpu.reset();
+        cpu.mem_write(0x0010, 0x40); // Set memory at 0x10 to 0x40
+        cpu.interpret();
+
+        assert_eq!(cpu.mem_read(0x0010), 0x80); // Result after shift
+        assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
+        assert_eq!(cpu.status & 0b1000_0000, 0b1000_0000); // Negative flag should be set
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+    }
+
+    #[test]
+    fn test_asl_zero_page_with_carry() {
+        let mut cpu = CPU::new();
+
+        // Load the program: ASL $10 (0x06 0x10)
+        // Shift value at memory location 0x0010, initially set to 0xFF (11111111 in binary)
+        // Expected result: 0xFE (11111110 in binary)
+        // Carry flag should be set because bit 7 was 1
+        // Negative flag should be set because bit 7 of the result is 1
+        // Zero flag should be clear because the result is not zero
+        cpu.load(vec![0x06, 0x10]); // ASL $10
+        cpu.reset();
+        cpu.mem_write(0x0010, 0xFF); // Set memory at 0x10 to 0xFF
+        cpu.interpret();
+
+        assert_eq!(cpu.mem_read(0x0010), 0xFE); // Result after shift
+        assert_eq!(cpu.status & 0b0000_0001, 0b0000_0001); // Carry flag should be set
+        assert_eq!(cpu.status & 0b1000_0000, 0b1000_0000); // Negative flag should be set
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+    }
+
+    #[test]
+    fn test_asl_zero_page_to_zero() {
+        let mut cpu = CPU::new();
+
+        // Load the program: ASL $10 (0x06 0x10)
+        // Shift value at memory location 0x0010, initially set to 0x01 (00000001 in binary)
+        // Expected result: 0x02 (00000010 in binary)
+        // Carry flag should be clear because bit 7 was 0
+        // Zero flag should be clear because the result is not zero
+        // Negative flag should be clear because bit 7 of the result is 0
+        cpu.load(vec![0x06, 0x10]); // ASL $10
+        cpu.reset();
+        cpu.mem_write(0x0010, 0x01); // Set memory at 0x10 to 0x01
+        cpu.interpret();
+
+        assert_eq!(cpu.mem_read(0x0010), 0x02); // Result after shift
+        assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
+        assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
+        assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
     }
 }

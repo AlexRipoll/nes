@@ -13,6 +13,7 @@ pub struct Instruction {
 enum Mnemonic {
     ADC,
     AND,
+    ASL,
     LDA,
     STA,
     TAX,
@@ -23,6 +24,7 @@ enum Mnemonic {
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
     Implied,
+    Accumulator,
     Immediate,
     ZeroPage,
     ZeroPage_X,
@@ -152,6 +154,42 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 5,
+            },
+            // ASL
+            0x0A => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ASL,
+                mode: AddressingMode::Accumulator,
+                size: 1,
+                cycles: 2,
+            },
+            0x06 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ASL,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 5,
+            },
+            0x16 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ASL,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 6,
+            },
+            0x0E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ASL,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 6,
+            },
+            0x1E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ASL,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 7,
             },
             // LDA
             0xA9 => Instruction {
