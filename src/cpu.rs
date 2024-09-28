@@ -1,13 +1,23 @@
 use core::panic;
 use std::u16;
 
-use crate::instruction::{self, AddressingMode, Instruction};
+use crate::instruction::{AddressingMode, Instruction};
 
 /// Status Flags
 ///   7   6   5   4   3   2   1   0
 /// +---+---+---+---+---+---+---+---+
 /// | N | V | - | B | D | I | Z | C |
 /// +---+---+---+---+---+---+---+---+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusFlag {
+    Carry = 0b0000_0001,
+    Zero = 0b0000_0010,
+    Interrupt = 0b0000_0100,
+    Decimal = 0b0000_1000,
+    Break = 0b0001_0000,
+    Overflow = 0b0100_0000,
+    Negative = 0b1000_0000,
+}
 
 #[derive(Debug)]
 struct CPU {
@@ -29,6 +39,14 @@ impl CPU {
             program_counter: 0,
             memory: [0u8; 0xFFFF],
         }
+    }
+
+    fn set_flag(&mut self, flag: StatusFlag) {
+        self.status |= flag as u8;
+    }
+
+    fn clear_flag(&mut self, flag: StatusFlag) {
+        self.status &= !(flag as u8);
     }
 
     fn mem_read(&self, address: u16) -> u8 {
@@ -309,7 +327,49 @@ impl CPU {
 
 #[cfg(test)]
 mod test {
-    use crate::cpu::CPU;
+    use crate::cpu::{StatusFlag, CPU};
+
+    #[test]
+    fn test_set_flag() {
+        let mut cpu = CPU::new();
+
+        // Set Carry flag
+        cpu.set_flag(StatusFlag::Carry);
+        assert_eq!(
+            cpu.status & StatusFlag::Carry as u8,
+            StatusFlag::Carry as u8
+        );
+
+        // Set Zero flag
+        cpu.set_flag(StatusFlag::Zero);
+        assert_eq!(cpu.status & StatusFlag::Zero as u8, StatusFlag::Zero as u8);
+
+        // Both Carry and Zero flags should be set
+        assert_eq!(
+            cpu.status & (StatusFlag::Carry as u8 | StatusFlag::Zero as u8),
+            0b0000_0011
+        );
+    }
+
+    #[test]
+    fn test_clear_flag() {
+        let mut cpu = CPU::new();
+
+        // Initially set Carry and Zero flags
+        cpu.set_flag(StatusFlag::Carry);
+        cpu.set_flag(StatusFlag::Zero);
+
+        // Clear Carry flag
+        cpu.clear_flag(StatusFlag::Carry);
+        assert_eq!(cpu.status & StatusFlag::Carry as u8, 0); // Carry should be cleared
+
+        // Ensure Zero flag is still set
+        assert_eq!(cpu.status & StatusFlag::Zero as u8, StatusFlag::Zero as u8);
+
+        // Clear Zero flag
+        cpu.clear_flag(StatusFlag::Zero);
+        assert_eq!(cpu.status & StatusFlag::Zero as u8, 0); // Zero should be cleared
+    }
 
     #[test]
     fn test_0xa9_lda_opcode() {
