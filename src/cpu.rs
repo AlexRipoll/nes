@@ -1,5 +1,4 @@
 use core::panic;
-use std::u16;
 
 use crate::instruction::{AddressingMode, Instruction};
 
@@ -55,6 +54,10 @@ impl CPU {
         self.status &= !flag.to_mask();
     }
 
+    fn is_flag_set(&mut self, flag: StatusFlag) -> bool {
+        self.status & flag.to_mask() != 0
+    }
+
     fn mem_read(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
@@ -95,7 +98,6 @@ impl CPU {
 
     pub fn interpret(&mut self) {
         loop {
-            println!("=>> {:X}", self.program_counter);
             let opcode = self.mem_read(self.program_counter);
             self.program_counter += 1;
 
@@ -112,6 +114,8 @@ impl CPU {
                 0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
                     self.asl(opcode);
                 }
+                // BCC
+                0x90 => self.bcc(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -154,6 +158,7 @@ impl CPU {
                 let address = operand.wrapping_add(self.register_y) as u16;
                 Some(address)
             }
+            AddressingMode::Relative => Some(self.mem_read(self.program_counter) as u16),
             AddressingMode::Absolute => Some(self.mem_read_u16(self.program_counter)),
             AddressingMode::Absolute_X => {
                 let operand = self.mem_read_u16(self.program_counter);
@@ -328,6 +333,17 @@ impl CPU {
         }
 
         self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn bcc(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let offset = self.operand_address(&instruction.mode).unwrap() as i8;
+        self.program_counter += instruction.size as u16 - 1;
+
+        if !self.is_flag_set(StatusFlag::Carry) {
+            // jump to address
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
     }
 }
 
@@ -845,5 +861,57 @@ mod test {
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
         assert_eq!(cpu.status & 0b1000_0000, 0); // Negative flag should be clear
         assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear
+    }
+
+    #[test]
+    fn test_bcc_no_branch() {
+        let mut cpu = CPU::new();
+
+        // Load the BCC instruction with a relative offset of 2
+        cpu.load(vec![0x90, 0x02, 0x00]); // BCC with offset 2
+        cpu.reset();
+
+        // Set the Carry flag (so the branch shouldn't occur)
+        cpu.set_flag(StatusFlag::Carry);
+        let initial_pc = cpu.program_counter;
+
+        // Run the instruction
+        cpu.interpret();
+
+        // The program counter should only increment by 2 (BCC opcode + operand + BRK opcode),
+        // since the Carry flag is set and the branch doesn't occur
+        assert_eq!(cpu.program_counter, initial_pc + 3);
+    }
+
+    #[test]
+    fn test_bcc_branch_forward() {
+        let mut cpu = CPU::new();
+
+        // Load the BCC instruction with a relative offset of 2
+        cpu.load(vec![0x90, 0x02]); // BCC with offset 2
+        cpu.reset();
+
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should jump forward by the offset
+        assert_eq!(cpu.program_counter, initial_pc + 2 + 2 + 1); // 2-byte instruction + offset + brk
+    }
+
+    #[test]
+    fn test_bcc_branch_backward() {
+        let mut cpu = CPU::new();
+
+        // Load the BCC instruction with a negative offset (-2)
+        cpu.load(vec![0x90, 0xFD]); // BCC with offset -3 (0xFE is -3 in two's complement)
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // After the BCC opcode (1 byte) and the offset byte (1 byte), the program counter is at initial_pc + 3 +1 corresponding to the BRK opcode
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
+        );
     }
 }

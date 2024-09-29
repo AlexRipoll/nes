@@ -14,6 +14,7 @@ enum Mnemonic {
     ADC,
     AND,
     ASL,
+    BCC,
     LDA,
     STA,
     TAX,
@@ -29,6 +30,7 @@ pub enum AddressingMode {
     ZeroPage,
     ZeroPage_X,
     ZeroPage_Y,
+    Relative,
     Absolute,
     Absolute_X,
     Absolute_Y,
@@ -190,6 +192,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Absolute_X,
                 size: 3,
                 cycles: 7,
+            },
+            // BCC
+            0x90 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::BCC,
+                mode: AddressingMode::Relative,
+                size: 2,
+                cycles: 2, // +1 if branch succeeds +2 if to a new page)
             },
             // LDA
             0xA9 => Instruction {
