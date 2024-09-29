@@ -54,7 +54,7 @@ impl CPU {
         self.status &= !flag.to_mask();
     }
 
-    fn is_flag_set(&mut self, flag: StatusFlag) -> bool {
+    fn is_flag_set(&self, flag: StatusFlag) -> bool {
         self.status & flag.to_mask() != 0
     }
 
@@ -340,33 +340,23 @@ impl CPU {
     }
 
     fn bcc(&mut self, opcode: u8) {
-        let instruction = Instruction::from(opcode);
-        let offset = self.operand_address(&instruction.mode).unwrap() as i8;
-        self.program_counter += instruction.size as u16 - 1;
-
-        if !self.is_flag_set(StatusFlag::Carry) {
-            // jump to address
-            self.program_counter = self.program_counter.wrapping_add(offset as u16);
-        }
+        self.branch(opcode, !self.is_flag_set(StatusFlag::Carry));
     }
 
     fn bcs(&mut self, opcode: u8) {
-        let instruction = Instruction::from(opcode);
-        let offset = self.operand_address(&instruction.mode).unwrap() as i8;
-        self.program_counter += instruction.size as u16 - 1;
-
-        if self.is_flag_set(StatusFlag::Carry) {
-            // jump to address
-            self.program_counter = self.program_counter.wrapping_add(offset as u16);
-        }
+        self.branch(opcode, self.is_flag_set(StatusFlag::Carry));
     }
 
     fn beq(&mut self, opcode: u8) {
+        self.branch(opcode, self.is_flag_set(StatusFlag::Zero));
+    }
+
+    fn branch(&mut self, opcode: u8, condition: bool) {
         let instruction = Instruction::from(opcode);
         let offset = self.operand_address(&instruction.mode).unwrap() as i8;
         self.program_counter += instruction.size as u16 - 1;
 
-        if self.is_flag_set(StatusFlag::Zero) {
+        if condition {
             // jump to address
             self.program_counter = self.program_counter.wrapping_add(offset as u16);
         }
