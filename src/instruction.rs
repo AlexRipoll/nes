@@ -16,6 +16,7 @@ enum Mnemonic {
     ASL,
     BCC,
     BCS,
+    BEQ,
     LDA,
     STA,
     TAX,
@@ -206,6 +207,14 @@ impl From<u8> for Instruction {
             0xB0 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::BCS,
+                mode: AddressingMode::Relative,
+                size: 2,
+                cycles: 2, // +1 if branch succeeds +2 if to a new page)
+            },
+            // BEQ
+            0xF0 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::BEQ,
                 mode: AddressingMode::Relative,
                 size: 2,
                 cycles: 2, // +1 if branch succeeds +2 if to a new page)
