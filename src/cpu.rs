@@ -58,6 +58,14 @@ impl CPU {
         self.status & flag.to_mask() != 0
     }
 
+    fn copy_bit_from(&mut self, src: u8, flag: StatusFlag) {
+        if src & flag.to_mask() != 0 {
+            self.set_flag(flag);
+        } else {
+            self.clear_flag(flag);
+        }
+    }
+
     fn mem_read(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
@@ -120,6 +128,8 @@ impl CPU {
                 0xB0 => self.bcs(opcode),
                 // BEQ
                 0xF0 => self.beq(opcode),
+                // BIT
+                0x24 | 0x2C => self.bit(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -339,6 +349,17 @@ impl CPU {
         self.program_counter += instruction.size as u16 - 1;
     }
 
+    fn branch(&mut self, opcode: u8, condition: bool) {
+        let instruction = Instruction::from(opcode);
+        let offset = self.operand_address(&instruction.mode).unwrap() as i8;
+        self.program_counter += instruction.size as u16 - 1;
+
+        if condition {
+            // jump to address
+            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        }
+    }
+
     fn bcc(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Carry));
     }
@@ -351,15 +372,21 @@ impl CPU {
         self.branch(opcode, self.is_flag_set(StatusFlag::Zero));
     }
 
-    fn branch(&mut self, opcode: u8, condition: bool) {
+    fn bit(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let offset = self.operand_address(&instruction.mode).unwrap() as i8;
-        self.program_counter += instruction.size as u16 - 1;
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
 
-        if condition {
-            // jump to address
-            self.program_counter = self.program_counter.wrapping_add(offset as u16);
+        if self.register_a & operand == 0 {
+            self.set_flag(StatusFlag::Zero);
+        } else {
+            self.clear_flag(StatusFlag::Zero);
         }
+
+        self.copy_bit_from(operand, StatusFlag::Overflow);
+        self.copy_bit_from(operand, StatusFlag::Negative);
+
+        self.program_counter += instruction.size as u16 - 1;
     }
 }
 
@@ -1033,5 +1060,74 @@ mod test {
             cpu.program_counter,
             initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
         );
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_bit_zero_flag() {
+            let mut cpu = CPU::new();
+
+            // Load the BIT instruction (0x24 for Zero Page) and a memory value into Zero Page
+            cpu.mem_write(0x10, 0x00); // Write 0x00 to memory location 0x10
+            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing (operand at 0x10)
+            cpu.reset();
+            cpu.register_a = 0xFF; // Set the accumulator to 0xFF
+            cpu.interpret();
+
+            // Since 0xFF & 0x00 = 0, the Zero flag should be set
+            assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        }
+
+        #[test]
+        fn test_bit_negative_flag() {
+            let mut cpu = CPU::new();
+
+            // Write a value with bit 7 set (0x80) to memory location 0x10
+            cpu.mem_write(0x10, 0x80);
+            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
+            cpu.reset();
+            cpu.register_a = 0xFF; // Set the accumulator to 0xFF
+            cpu.interpret();
+
+            // Since memory[0x10] has bit 7 set (0x80), the Negative flag should be set
+            assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        }
+
+        #[test]
+        fn test_bit_overflow_flag() {
+            let mut cpu = CPU::new();
+
+            // Write a value with bit 6 set (0x40) to memory location 0x10
+            cpu.mem_write(0x10, 0x40);
+            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
+            cpu.reset();
+            cpu.register_a = 0xFF; // Set the accumulator to 0xFF
+            cpu.interpret();
+
+            // Since memory[0x10] has bit 6 set (0x40), the Overflow flag should be set
+            assert!(cpu.status & StatusFlag::Overflow as u8 != 0);
+        }
+
+        #[test]
+        fn test_bit_no_flags_set() {
+            let mut cpu = CPU::new();
+
+            // Write a value with neither bit 6 nor bit 7 set (0x3F) to memory location 0x10
+            cpu.mem_write(0x10, 0x3F);
+            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
+            cpu.reset();
+            cpu.register_a = 0x01; // Set the accumulator to 0x01
+            cpu.interpret();
+
+            // Since 0x01 & 0x3F != 0, Zero flag should NOT be set
+            assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+            // Neither bit 6 nor bit 7 are set in memory, so neither Overflow nor Negative should be set
+            assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+            assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+        }
     }
 }
