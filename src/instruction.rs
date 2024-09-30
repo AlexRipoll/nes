@@ -23,6 +23,7 @@ enum Mnemonic {
     BPL,
     BRK,
     BVC,
+    BVS,
     LDA,
     STA,
     TAX,
@@ -276,6 +277,14 @@ impl From<u8> for Instruction {
             0x50 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::BVC,
+                mode: AddressingMode::Relative,
+                size: 2,
+                cycles: 2, // +1 if branch succeeds +2 if to a new page)
+            },
+            // BVS
+            0x70 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::BVS,
                 mode: AddressingMode::Relative,
                 size: 2,
                 cycles: 2, // +1 if branch succeeds +2 if to a new page)
