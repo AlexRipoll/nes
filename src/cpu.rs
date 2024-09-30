@@ -14,6 +14,7 @@ pub enum StatusFlag {
     Interrupt = 0b0000_0100,
     Decimal = 0b0000_1000,
     Break = 0b0001_0000,
+    Unused = 0b0010_0000,
     Overflow = 0b0100_0000,
     Negative = 0b1000_0000,
 }
@@ -31,7 +32,8 @@ struct CPU {
     register_y: u8,
     status: u8,
     program_counter: u16,
-    memory: [u8; 0xFFFF],
+    stack_ptr: u8,
+    memory: [u8; 0xFFFF + 1],
 }
 
 impl CPU {
@@ -42,7 +44,8 @@ impl CPU {
             register_y: 0,
             status: 0,
             program_counter: 0,
-            memory: [0u8; 0xFFFF],
+            stack_ptr: 0xFD,
+            memory: [0u8; 0xFFFF + 1],
         }
     }
 
@@ -83,6 +86,31 @@ impl CPU {
     fn mem_write_u16(&mut self, address: u16, data: u16) {
         let le_bytes = data.to_le_bytes();
         self.memory[address as usize..=address as usize + 1].copy_from_slice(&le_bytes);
+    }
+
+    fn stack_push(&mut self, data: u8) {
+        if self.stack_ptr == 0x00 {
+            panic!("Stack overflow! Cannot push more data.");
+        }
+
+        // Stack is located from 0x0100 to 0x01FF, so add 0x100 to SP to get the address
+        let stack_address = 0x0100 + self.stack_ptr as u16;
+        self.mem_write(stack_address, data);
+
+        self.stack_ptr = self.stack_ptr.wrapping_sub(1);
+    }
+
+    fn stack_pop(&mut self) -> u8 {
+        // Check for stack underflow (stack pointer should not exceed 0xFF)
+        if self.stack_ptr == 0xFF {
+            panic!("Stack underflow! Cannot pop more data.");
+        }
+
+        // Increment the stack pointer to point to the current value (since it is decremented on push)
+        self.stack_ptr = self.stack_ptr.wrapping_add(1);
+        let stack_address = 0x0100 + self.stack_ptr as u16;
+
+        self.mem_read(stack_address)
     }
 
     fn load(&mut self, program: Vec<u8>) {
@@ -154,6 +182,7 @@ impl CPU {
                 }
                 // BRK
                 0x00 => {
+                    // self.brk();
                     return;
                 }
                 _ => panic!("Opcode not supported {:X}", opcode),
@@ -405,6 +434,26 @@ impl CPU {
 
     fn bpl(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Negative));
+    }
+
+    fn brk(&mut self) {
+        // Push the current PC (next instruction address) onto the stack
+        let pc_msb = (self.program_counter >> 8) as u8;
+        let pc_lsb = self.program_counter as u8;
+        self.stack_push(pc_msb);
+        self.stack_push(pc_lsb);
+
+        // Push the processor status onto the stack (with the Break flag set)
+        self.set_flag(StatusFlag::Break);
+        self.set_flag(StatusFlag::Unused); // set to 1 as per 6502 conventions
+        self.stack_push(self.status);
+
+        // Fetch the interrupt vector address from $FFFE-$FFFF
+        let irq_lsb = self.mem_read(0xFFFE);
+        let irq_msb = self.mem_read(0xFFFF);
+        let irq_vector = (irq_msb as u16) << 8 | (irq_lsb as u16);
+
+        self.program_counter = irq_vector;
     }
 }
 
@@ -1270,4 +1319,46 @@ mod test {
             initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
         );
     }
+
+    #[test]
+    #[should_panic(expected = "Stack overflow! Cannot push more data.")]
+    fn test_stack_push_overflow() {
+        let mut cpu = CPU::new();
+
+        // Set the stack pointer to 0x00 (stack is full)
+        cpu.stack_ptr = 0x00;
+
+        // Try pushing a value when the stack is full
+        // This should panic with "Stack overflow" message
+        cpu.stack_push(0x42);
+    }
+
+    // #[test]
+    // fn test_brk_instruction() {
+    //     let mut cpu = CPU::new();
+    //
+    //     // Setup: Writing the IRQ vector at $FFFE/$FFFF to point to 0x1234 (interrupt handler)
+    //     cpu.mem_write(0xFFFE, 0x34); // Low byte of interrupt vector
+    //     cpu.mem_write(0xFFFF, 0x12); // High byte of interrupt vector
+    //
+    //     // Load the BRK instruction
+    //     cpu.load(vec![0x00]); // 0x00 is the opcode for BRK
+    //     cpu.reset();
+    //
+    //     // Set the program counter and accumulator to a known value
+    //     cpu.program_counter = 0x1000; // Initial PC value
+    //     cpu.interpret();
+    //
+    //     // Check that the status register was pushed to the stack
+    //     // The Break (B) flag (0x10) and the unused bit (0x20) should be set in the status register.
+    //     let status = cpu.stack_pop();
+    //     assert_eq!(status & 0b00110000, 0b00110000); // Break (B) flag and Unused bit should be set
+    //
+    //     // Check that the correct PC value (next instruction address) was pushed to the stack
+    //     assert_eq!(cpu.stack_pop(), 0x01); // Low byte of PC (0x1001)
+    //     assert_eq!(cpu.stack_pop(), 0x10); // High byte of PC (0x1001)
+    //
+    //     // Check that the program counter is set to the IRQ vector (0x1234)
+    //     assert_eq!(cpu.program_counter, 0x1234);
+    // }
 }
