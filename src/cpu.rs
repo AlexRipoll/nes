@@ -172,6 +172,8 @@ impl CPU {
                 0x18 => self.clc(opcode),
                 // CLD
                 0xD8 => self.cld(opcode),
+                // CLI
+                0x58 => self.cli(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -482,6 +484,13 @@ impl CPU {
     fn cld(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Decimal);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn cli(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.clear_flag(StatusFlag::Interrupt);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -1521,5 +1530,20 @@ mod test {
         cpu.interpret();
 
         assert!(cpu.status & StatusFlag::Decimal as u8 == 0);
+    }
+
+    #[test]
+    fn test_cli_instruction() {
+        let mut cpu = CPU::new();
+
+        // Load the CLI instruction (opcode 0x58)
+        cpu.load(vec![0x58]);
+        cpu.reset();
+        // Set the Interrupt flag before running CLI
+        cpu.set_flag(StatusFlag::Interrupt);
+        assert!(cpu.status & StatusFlag::Interrupt as u8 != 0); // Ensure Interrupt flag is set
+        cpu.interpret();
+
+        assert!(cpu.status & StatusFlag::Interrupt as u8 == 0);
     }
 }
