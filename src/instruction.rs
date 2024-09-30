@@ -30,6 +30,7 @@ enum Mnemonic {
     CLV,
     CMP,
     CPX,
+    CPY,
     LDA,
     STA,
     TAX,
@@ -402,6 +403,28 @@ impl From<u8> for Instruction {
             0xEC => Instruction {
                 opcode,
                 mnemonic: Mnemonic::CPX,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 4,
+            },
+            // CPY
+            0xC0 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CPY,
+                mode: AddressingMode::Immediate,
+                size: 2,
+                cycles: 2,
+            },
+            0xC4 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CPY,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 3,
+            },
+            0xCC => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CPY,
                 mode: AddressingMode::Absolute,
                 size: 3,
                 cycles: 4,

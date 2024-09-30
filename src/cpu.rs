@@ -184,6 +184,10 @@ impl CPU {
                 0xE0 | 0xE4 | 0xEC => {
                     self.cpx(opcode);
                 }
+                // CPY
+                0xC0 | 0xC4 | 0xCC => {
+                    self.cpy(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -539,6 +543,10 @@ impl CPU {
 
     fn cpx(&mut self, opcode: u8) {
         self.compare(opcode, self.register_x);
+    }
+
+    fn cpy(&mut self, opcode: u8) {
+        self.compare(opcode, self.register_y);
     }
 }
 
@@ -1749,6 +1757,78 @@ mod test {
         // Zero flag should be clear
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
         // Negative flag should be set because result (0x30 - 0x80) = 0xB0 is negative
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_cpy_carry_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CPY instruction with a value less than the Y register
+        cpu.load(vec![0xC0, 0x10]); // CPY with immediate mode, compare with 0x10
+        cpu.reset();
+        cpu.register_y = 0x20; // Set Y to 0x20 (32 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set because Y (0x20) > operand (0x10)
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_cpy_zero_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CPY instruction with a value equal to the Y register
+        cpu.load(vec![0xC0, 0x10]); // CPY with immediate mode
+        cpu.reset();
+        cpu.register_y = 0x10; // Set Y to 0x10 (16 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set because Y == operand
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Zero flag should be set because Y == operand
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_cpy_negative_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CPY instruction with a value greater than the Y register
+        cpu.load(vec![0xC0, 0x20]); // CPY with immediate mode
+        cpu.reset();
+        cpu.register_y = 0x10; // Set Y to 0x10 (16 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be clear because Y (0x10) < operand (0x20)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be set because the result (Y - operand) is negative
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_cpy_carry_flag_clear() {
+        let mut cpu = CPU::new();
+
+        // Load the CPY instruction with a value that makes the result negative
+        cpu.load(vec![0xC0, 0x80]); // CPY with immediate mode
+        cpu.reset();
+        cpu.register_y = 0x30; // Set Y to 0x30 (48 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be clear because Y (0x30) < operand (0x80)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be set because the result (Y - operand) is negative
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }
