@@ -24,6 +24,7 @@ enum Mnemonic {
     BRK,
     BVC,
     BVS,
+    CLC,
     LDA,
     STA,
     TAX,
@@ -288,6 +289,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Relative,
                 size: 2,
                 cycles: 2, // +1 if branch succeeds +2 if to a new page)
+            },
+            // CLC
+            0x18 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CLC,
+                mode: AddressingMode::Relative,
+                size: 1,
+                cycles: 2,
             },
             // LDA
             0xA9 => Instruction {

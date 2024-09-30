@@ -168,6 +168,8 @@ impl CPU {
                 0x50 => self.bvc(opcode),
                 // BVS
                 0x70 => self.bvs(opcode),
+                // CLC
+                0x18 => self.clc(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -466,6 +468,14 @@ impl CPU {
 
     fn bvs(&mut self, opcode: u8) {
         self.branch(opcode, self.is_flag_set(StatusFlag::Overflow));
+    }
+
+    fn clc(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        self.clear_flag(StatusFlag::Carry);
+
+        self.program_counter += instruction.size as u16 - 1;
     }
 }
 
@@ -1346,6 +1356,7 @@ mod test {
         cpu.stack_push(0x42);
     }
 
+    //  TODO:
     // #[test]
     // fn test_brk_instruction() {
     //     let mut cpu = CPU::new();
@@ -1472,5 +1483,21 @@ mod test {
             cpu.program_counter,
             initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
         );
+    }
+
+    #[test]
+    fn test_clc_instruction() {
+        let mut cpu = CPU::new();
+
+        // Load the CLC instruction (opcode 0x18)
+        cpu.load(vec![0x18]);
+        cpu.reset();
+        // Set the Carry flag before running CLC
+        cpu.set_flag(StatusFlag::Carry);
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0); // Ensure Carry flag is set
+        cpu.interpret();
+
+        // Assert that the Carry flag is cleared
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
     }
 }
