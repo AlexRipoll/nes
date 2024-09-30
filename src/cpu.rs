@@ -134,6 +134,8 @@ impl CPU {
                 0x30 => self.bmi(opcode),
                 // BNE
                 0xD0 => self.bne(opcode),
+                // BPL
+                0x10 => self.bpl(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -399,6 +401,10 @@ impl CPU {
 
     fn bne(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Zero));
+    }
+
+    fn bpl(&mut self, opcode: u8) {
+        self.branch(opcode, !self.is_flag_set(StatusFlag::Negative));
     }
 }
 
@@ -1074,152 +1080,194 @@ mod test {
         );
     }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
+    #[test]
+    fn test_bit_zero_flag() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bit_zero_flag() {
-            let mut cpu = CPU::new();
+        // Load the BIT instruction (0x24 for Zero Page) and a memory value into Zero Page
+        cpu.mem_write(0x10, 0x00); // Write 0x00 to memory location 0x10
+        cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing (operand at 0x10)
+        cpu.reset();
+        cpu.register_a = 0xFF; // Set the accumulator to 0xFF
+        cpu.interpret();
 
-            // Load the BIT instruction (0x24 for Zero Page) and a memory value into Zero Page
-            cpu.mem_write(0x10, 0x00); // Write 0x00 to memory location 0x10
-            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing (operand at 0x10)
-            cpu.reset();
-            cpu.register_a = 0xFF; // Set the accumulator to 0xFF
-            cpu.interpret();
+        // Since 0xFF & 0x00 = 0, the Zero flag should be set
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+    }
 
-            // Since 0xFF & 0x00 = 0, the Zero flag should be set
-            assert!(cpu.status & StatusFlag::Zero as u8 != 0);
-        }
+    #[test]
+    fn test_bit_negative_flag() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bit_negative_flag() {
-            let mut cpu = CPU::new();
+        // Write a value with bit 7 set (0x80) to memory location 0x10
+        cpu.mem_write(0x10, 0x80);
+        cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
+        cpu.reset();
+        cpu.register_a = 0xFF; // Set the accumulator to 0xFF
+        cpu.interpret();
 
-            // Write a value with bit 7 set (0x80) to memory location 0x10
-            cpu.mem_write(0x10, 0x80);
-            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
-            cpu.reset();
-            cpu.register_a = 0xFF; // Set the accumulator to 0xFF
-            cpu.interpret();
+        // Since memory[0x10] has bit 7 set (0x80), the Negative flag should be set
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
 
-            // Since memory[0x10] has bit 7 set (0x80), the Negative flag should be set
-            assert!(cpu.status & StatusFlag::Negative as u8 != 0);
-        }
+    #[test]
+    fn test_bit_overflow_flag() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bit_overflow_flag() {
-            let mut cpu = CPU::new();
+        // Write a value with bit 6 set (0x40) to memory location 0x10
+        cpu.mem_write(0x10, 0x40);
+        cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
+        cpu.reset();
+        cpu.register_a = 0xFF; // Set the accumulator to 0xFF
+        cpu.interpret();
 
-            // Write a value with bit 6 set (0x40) to memory location 0x10
-            cpu.mem_write(0x10, 0x40);
-            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
-            cpu.reset();
-            cpu.register_a = 0xFF; // Set the accumulator to 0xFF
-            cpu.interpret();
+        // Since memory[0x10] has bit 6 set (0x40), the Overflow flag should be set
+        assert!(cpu.status & StatusFlag::Overflow as u8 != 0);
+    }
 
-            // Since memory[0x10] has bit 6 set (0x40), the Overflow flag should be set
-            assert!(cpu.status & StatusFlag::Overflow as u8 != 0);
-        }
+    #[test]
+    fn test_bit_no_flags_set() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bit_no_flags_set() {
-            let mut cpu = CPU::new();
+        // Write a value with neither bit 6 nor bit 7 set (0x3F) to memory location 0x10
+        cpu.mem_write(0x10, 0x3F);
+        cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
+        cpu.reset();
+        cpu.register_a = 0x01; // Set the accumulator to 0x01
+        cpu.interpret();
 
-            // Write a value with neither bit 6 nor bit 7 set (0x3F) to memory location 0x10
-            cpu.mem_write(0x10, 0x3F);
-            cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
-            cpu.reset();
-            cpu.register_a = 0x01; // Set the accumulator to 0x01
-            cpu.interpret();
+        // Since 0x01 & 0x3F != 0, Zero flag should NOT be set
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
 
-            // Since 0x01 & 0x3F != 0, Zero flag should NOT be set
-            assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Neither bit 6 nor bit 7 are set in memory, so neither Overflow nor Negative should be set
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
 
-            // Neither bit 6 nor bit 7 are set in memory, so neither Overflow nor Negative should be set
-            assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
-            assert!(cpu.status & StatusFlag::Negative as u8 == 0);
-        }
+    #[test]
+    fn test_bmi_branch_taken() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bmi_branch_taken() {
-            let mut cpu = CPU::new();
+        // Load the BMI instruction with a positive offset (e.g., +9)
+        cpu.load(vec![0x30, 0x09]); // BMI with offset +9
+        cpu.reset();
+        // Set the Negative flag (so the branch should occur)
+        cpu.set_flag(StatusFlag::Negative);
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
 
-            // Load the BMI instruction with a positive offset (e.g., +9)
-            cpu.load(vec![0x30, 0x09]); // BMI with offset +9
-            cpu.reset();
-            // Set the Negative flag (so the branch should occur)
-            cpu.set_flag(StatusFlag::Negative);
-            let initial_pc = cpu.program_counter;
-            cpu.interpret();
+        // The program counter should jump forward by 12 (opcode + operand + offset (+9) + BRK)
+        assert_eq!(cpu.program_counter, initial_pc.wrapping_add(12));
+    }
 
-            // The program counter should jump forward by 12 (opcode + operand + offset (+9) + BRK)
-            assert_eq!(cpu.program_counter, initial_pc.wrapping_add(12));
-        }
+    #[test]
+    fn test_bmi_no_branch() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bmi_no_branch() {
-            let mut cpu = CPU::new();
+        // Load the BMI instruction with a positive offset (e.g., +4)
+        cpu.load(vec![0x30, 0x04]); // BMI with offset +4
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
 
-            // Load the BMI instruction with a positive offset (e.g., +4)
-            cpu.load(vec![0x30, 0x04]); // BMI with offset +4
-            cpu.reset();
-            let initial_pc = cpu.program_counter;
-            cpu.interpret();
+        // The program counter should NOT jump, it should just move to the next instruction (opcode + operand + BRK)
+        assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
+    }
 
-            // The program counter should NOT jump, it should just move to the next instruction (opcode + operand + BRK)
-            assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
-        }
+    #[test]
+    fn test_bne_branch_forward() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bne_branch_forward() {
-            let mut cpu = CPU::new();
+        // Load the BNE instruction with a positive offset (+4)
+        cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
 
-            // Load the BNE instruction with a positive offset (+4)
-            cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
-            cpu.reset();
-            let initial_pc = cpu.program_counter;
-            cpu.interpret();
+        // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_add(5)
+        );
+    }
 
-            // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
-            assert_eq!(
-                cpu.program_counter,
-                initial_pc.wrapping_add(2).wrapping_add(5)
-            );
-        }
+    #[test]
+    fn test_bne_no_branch_when_zero_set() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bne_no_branch_when_zero_set() {
-            let mut cpu = CPU::new();
+        // Load the BEQ instruction with a positive offset (+4)
+        cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
+        cpu.reset();
+        cpu.set_flag(StatusFlag::Zero);
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
 
-            // Load the BEQ instruction with a positive offset (+4)
-            cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
-            cpu.reset();
-            cpu.set_flag(StatusFlag::Zero);
-            let initial_pc = cpu.program_counter;
-            cpu.interpret();
+        // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
+        assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
+    }
 
-            // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
-            assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
-        }
+    #[test]
+    fn test_bne_branch_backward() {
+        let mut cpu = CPU::new();
 
-        #[test]
-        fn test_bne_branch_backward() {
-            let mut cpu = CPU::new();
+        // Load the BEQ instruction with a negative offset (-2)
+        cpu.load(vec![0xD0, 0xFD]); // BNE (0xD0) with offset -2 (0xFE in two's complement is -2)
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
 
-            // Load the BEQ instruction with a negative offset (-2)
-            cpu.load(vec![0xD0, 0xFD]); // BNE (0xD0) with offset -2 (0xFE in two's complement is -2)
-            cpu.reset();
-            // Set the Zero flag (so the branch should occur)
-            let initial_pc = cpu.program_counter;
-            cpu.interpret();
+        // The program counter should jump backward by 2 + 1 (BRK)
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
+        );
+    }
+    #[test]
+    fn test_bpl_branch_forward() {
+        let mut cpu = CPU::new();
 
-            // The program counter should jump backward by 2 + 1 (BRK)
-            assert_eq!(
-                cpu.program_counter,
-                initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
-            );
-        }
+        // Load the BPL instruction with a positive offset (+4)
+        cpu.load(vec![0x10, 0x04]); // BPL (0x10) with offset +4
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_add(5)
+        );
+    }
+
+    #[test]
+    fn test_bpl_no_branch_when_negative_set() {
+        let mut cpu = CPU::new();
+
+        // Load the BEQ instruction with a positive offset (+4)
+        cpu.load(vec![0x10, 0x04]); // BPL (0x10) with offset +4
+        cpu.reset();
+        cpu.set_flag(StatusFlag::Negative);
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
+        assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
+    }
+
+    #[test]
+    fn test_bpl_branch_backward() {
+        let mut cpu = CPU::new();
+
+        // Load the BEQ instruction with a negative offset (-2)
+        cpu.load(vec![0x10, 0xFD]); // BPL (0x10) with offset -2 (0xFE in two's complement is -2)
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should jump backward by 2 + 1 (BRK)
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
+        );
     }
 }

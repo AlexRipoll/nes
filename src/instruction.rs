@@ -19,11 +19,12 @@ enum Mnemonic {
     BEQ,
     BIT,
     BMI,
+    BNE,
+    BPL,
     LDA,
     STA,
     TAX,
     INC,
-    BNE,
 }
 
 #[derive(Debug)]
@@ -249,6 +250,14 @@ impl From<u8> for Instruction {
             0xD0 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::BNE,
+                mode: AddressingMode::Relative,
+                size: 2,
+                cycles: 2, // +1 if branch succeeds +2 if to a new page)
+            },
+            // BPL
+            0x10 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::BPL,
                 mode: AddressingMode::Relative,
                 size: 2,
                 cycles: 2, // +1 if branch succeeds +2 if to a new page)
