@@ -33,6 +33,7 @@ enum Mnemonic {
     CPY,
     DEC,
     DEX,
+    DEY,
     LDA,
     STA,
     TAX,
@@ -464,6 +465,14 @@ impl From<u8> for Instruction {
             0xCA => Instruction {
                 opcode,
                 mnemonic: Mnemonic::DEX,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
+            },
+            // DEY
+            0x88 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DEY,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,
