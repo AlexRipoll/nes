@@ -130,6 +130,8 @@ impl CPU {
                 0xF0 => self.beq(opcode),
                 // BIT
                 0x24 | 0x2C => self.bit(opcode),
+                // BMI
+                0x30 => self.bmi(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -354,10 +356,13 @@ impl CPU {
         let offset = self.operand_address(&instruction.mode).unwrap() as i8;
         self.program_counter += instruction.size as u16 - 1;
 
+        println!("=> {:X}", self.program_counter);
         if condition {
+            println!("OFFSET {}", offset);
             // jump to address
             self.program_counter = self.program_counter.wrapping_add(offset as u16);
         }
+        println!("=> {}", self.program_counter);
     }
 
     fn bcc(&mut self, opcode: u8) {
@@ -387,6 +392,10 @@ impl CPU {
         self.copy_bit_from(operand, StatusFlag::Negative);
 
         self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn bmi(&mut self, opcode: u8) {
+        self.branch(opcode, self.is_flag_set(StatusFlag::Negative));
     }
 }
 
@@ -1128,6 +1137,36 @@ mod test {
             // Neither bit 6 nor bit 7 are set in memory, so neither Overflow nor Negative should be set
             assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
             assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+        }
+
+        #[test]
+        fn test_bmi_branch_taken() {
+            let mut cpu = CPU::new();
+
+            // Load the BMI instruction with a positive offset (e.g., +9)
+            cpu.load(vec![0x30, 0x09]); // BMI with offset +9
+            cpu.reset();
+            // Set the Negative flag (so the branch should occur)
+            cpu.set_flag(StatusFlag::Negative);
+            let initial_pc = cpu.program_counter;
+            cpu.interpret();
+
+            // The program counter should jump forward by 12 (opcode + operand + offset (+9) + BRK)
+            assert_eq!(cpu.program_counter, initial_pc.wrapping_add(12));
+        }
+
+        #[test]
+        fn test_bmi_no_branch() {
+            let mut cpu = CPU::new();
+
+            // Load the BMI instruction with a positive offset (e.g., +4)
+            cpu.load(vec![0x30, 0x04]); // BMI with offset +4
+            cpu.reset();
+            let initial_pc = cpu.program_counter;
+            cpu.interpret();
+
+            // The program counter should NOT jump, it should just move to the next instruction (opcode + operand + BRK)
+            assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
         }
     }
 }

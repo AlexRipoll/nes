@@ -18,6 +18,7 @@ enum Mnemonic {
     BCS,
     BEQ,
     BIT,
+    BMI,
     LDA,
     STA,
     TAX,
@@ -234,6 +235,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Absolute,
                 size: 3,
                 cycles: 4,
+            },
+            // BMI
+            0x30 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::BMI,
+                mode: AddressingMode::Relative,
+                size: 2,
+                cycles: 2, // +1 if branch succeeds +2 if to a new page)
             },
             // LDA
             0xA9 => Instruction {
