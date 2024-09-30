@@ -196,6 +196,10 @@ impl CPU {
                 0xCA => self.dex(opcode),
                 // DEY
                 0x88 => self.dey(opcode),
+                // EOR
+                0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
+                    self.eor(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -584,6 +588,18 @@ impl CPU {
 
         self.register_y = self.register_y.wrapping_sub(1);
         self.set_zero_and_negative_flags(self.register_y);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn eor(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        self.register_a ^= operand;
+
+        self.set_zero_and_negative_flags(self.register_a);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2048,6 +2064,81 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
 
         // Negative flag should be clear because the result is positive
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_eor_non_zero_result() {
+        let mut cpu = CPU::new();
+
+        // Load the EOR instruction (Immediate mode) and XOR with 0b10101010
+        cpu.load(vec![0x49, 0b10101010]); // EOR #$AA
+        cpu.reset();
+        cpu.register_a = 0b11001100; // Set A to 0b11001100 (204 in decimal)
+        cpu.interpret();
+
+        // The result of 0b11001100 ^ 0b10101010 should be 0b01100110
+        assert_eq!(cpu.register_a, 0b01100110);
+
+        // Neither Zero nor Negative flags should be set
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_eor_zero_result() {
+        let mut cpu = CPU::new();
+
+        // Load the EOR instruction (Immediate mode) and XOR with 0xFF
+        cpu.load(vec![0x49, 0xFF]); // EOR #$FF
+        cpu.reset();
+        cpu.register_a = 0xFF; // Set A to 0xFF (255 in decimal)
+        cpu.interpret();
+
+        // The result of 0xFF ^ 0xFF should be 0x00
+        assert_eq!(cpu.register_a, 0x00);
+
+        // Zero flag should be set
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_eor_negative_result() {
+        let mut cpu = CPU::new();
+
+        // Load the EOR instruction (Immediate mode) and XOR with 0xFF
+        cpu.load(vec![0x49, 0x01]); // EOR #$01
+        cpu.reset();
+        cpu.register_a = 0x80; // Set A to 0x80 (128 in decimal, MSB set)
+        cpu.interpret();
+
+        // The result of 0x80 ^ 0x01 should be 0x81 (negative in two's complement)
+        assert_eq!(cpu.register_a, 0x81);
+
+        // Negative flag should be set
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+    }
+
+    #[test]
+    fn test_eor_zero_accumulator() {
+        let mut cpu = CPU::new();
+
+        // Load the EOR instruction (Immediate mode) and XOR with 0x55
+        cpu.load(vec![0x49, 0x55]); // EOR #$55
+        cpu.reset();
+        cpu.register_a = 0x00; // Set A to 0x00 (accumulator is zero)
+        cpu.interpret();
+
+        // The result of 0x00 ^ 0x55 should be 0x55
+        assert_eq!(cpu.register_a, 0x55);
+
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear
         assert!(cpu.status & StatusFlag::Negative as u8 == 0);
     }
 }
