@@ -164,6 +164,8 @@ impl CPU {
                 0xD0 => self.bne(opcode),
                 // BPL
                 0x10 => self.bpl(opcode),
+                // BVC
+                0x50 => self.bvc(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -454,6 +456,10 @@ impl CPU {
         let irq_vector = (irq_msb as u16) << 8 | (irq_lsb as u16);
 
         self.program_counter = irq_vector;
+    }
+
+    fn bvc(&mut self, opcode: u8) {
+        self.branch(opcode, !self.is_flag_set(StatusFlag::Overflow));
     }
 }
 
@@ -1271,6 +1277,7 @@ mod test {
             initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
         );
     }
+
     #[test]
     fn test_bpl_branch_forward() {
         let mut cpu = CPU::new();
@@ -1361,4 +1368,53 @@ mod test {
     //     // Check that the program counter is set to the IRQ vector (0x1234)
     //     assert_eq!(cpu.program_counter, 0x1234);
     // }
+
+    #[test]
+    fn test_bvc_branch_forward() {
+        let mut cpu = CPU::new();
+
+        // Load the BPL instruction with a positive offset (+4)
+        cpu.load(vec![0x50, 0x04]); // BPL (0x10) with offset +4
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_add(5)
+        );
+    }
+
+    #[test]
+    fn test_bvc_no_branch_when_overflow_set() {
+        let mut cpu = CPU::new();
+
+        // Load the BEQ instruction with a positive offset (+4)
+        cpu.load(vec![0x50, 0x04]); // BPL (0x10) with offset +4
+        cpu.reset();
+        cpu.set_flag(StatusFlag::Overflow);
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
+        assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
+    }
+
+    #[test]
+    fn test_bvc_branch_backward() {
+        let mut cpu = CPU::new();
+
+        // Load the BEQ instruction with a negative offset (-2)
+        cpu.load(vec![0x50, 0xFD]); // BPL (0x10) with offset -2 (0xFE in two's complement is -2)
+        cpu.reset();
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // The program counter should jump backward by 2 + 1 (BRK)
+        assert_eq!(
+            cpu.program_counter,
+            initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
+        );
+    }
 }
