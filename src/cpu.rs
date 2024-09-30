@@ -176,6 +176,10 @@ impl CPU {
                 0x58 => self.cli(opcode),
                 // CLV
                 0xB8 => self.clv(opcode),
+                // CMP
+                0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
+                    self.cmp(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -500,6 +504,27 @@ impl CPU {
     fn clv(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Overflow);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn cmp(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        if self.register_a >= operand {
+            self.set_flag(StatusFlag::Carry);
+        } else {
+            self.clear_flag(StatusFlag::Carry);
+        }
+        if self.register_a == operand {
+            self.set_flag(StatusFlag::Zero);
+        } else {
+            self.clear_flag(StatusFlag::Zero);
+        }
+
+        self.copy_bit_from(self.register_a.wrapping_sub(operand), StatusFlag::Negative);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -1569,5 +1594,77 @@ mod test {
         cpu.interpret();
 
         assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+    }
+
+    #[test]
+    fn test_cmp_carry_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CMP instruction with a value less than the accumulator
+        cpu.load(vec![0xC9, 0x10]); // CMP with immediate mode, compare with 0x10
+        cpu.reset();
+        cpu.register_a = 0x20; // Set A to 0x20 (32 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set because A (0x20) > operand (0x10)
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_cmp_zero_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CMP instruction with a value equal to the accumulator
+        cpu.load(vec![0xC9, 0x10]); // CMP with immediate mode
+        cpu.reset();
+        cpu.register_a = 0x10; // Set A to 0x10 (16 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Zero flag should be set because A == operand
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_cmp_negative_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CMP instruction with a value greater than the accumulator
+        cpu.load(vec![0xC9, 0x20]); // CMP with immediate mode
+        cpu.reset();
+        cpu.register_a = 0x10; // Set A to 0x10 (16 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be clear because A (0x10) < operand (0x20)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_cmp_carry_flag_clear() {
+        let mut cpu = CPU::new();
+
+        // Load the CMP instruction with a value that makes the result negative
+        cpu.load(vec![0xC9, 0x80]); // CMP with immediate mode
+        cpu.reset();
+        cpu.register_a = 0x30; // Set A to 0x30 (48 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set because A (0x30) > operand (0x80)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be set because result (0x30 - 0x80) = 0xB0 is negative
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }
