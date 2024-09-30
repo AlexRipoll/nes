@@ -25,6 +25,7 @@ enum Mnemonic {
     BVC,
     BVS,
     CLC,
+    CLD,
     LDA,
     STA,
     TAX,
@@ -294,6 +295,14 @@ impl From<u8> for Instruction {
             0x18 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::CLC,
+                mode: AddressingMode::Relative,
+                size: 1,
+                cycles: 2,
+            },
+            // CLD
+            0xD8 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CLD,
                 mode: AddressingMode::Relative,
                 size: 1,
                 cycles: 2,

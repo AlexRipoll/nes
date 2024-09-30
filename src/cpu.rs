@@ -170,6 +170,8 @@ impl CPU {
                 0x70 => self.bvs(opcode),
                 // CLC
                 0x18 => self.clc(opcode),
+                // CLD
+                0xD8 => self.cld(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -472,8 +474,14 @@ impl CPU {
 
     fn clc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         self.clear_flag(StatusFlag::Carry);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn cld(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.clear_flag(StatusFlag::Decimal);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -1497,7 +1505,21 @@ mod test {
         assert!(cpu.status & StatusFlag::Carry as u8 != 0); // Ensure Carry flag is set
         cpu.interpret();
 
-        // Assert that the Carry flag is cleared
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+    }
+
+    #[test]
+    fn test_cld_instruction() {
+        let mut cpu = CPU::new();
+
+        // Load the CLD instruction (opcode 0xD8)
+        cpu.load(vec![0xD8]);
+        cpu.reset();
+        // Set the Carry flag before running CLC
+        cpu.set_flag(StatusFlag::Decimal);
+        assert!(cpu.status & StatusFlag::Decimal as u8 != 0); // Ensure Decimal flag is set
+        cpu.interpret();
+
+        assert!(cpu.status & StatusFlag::Decimal as u8 == 0);
     }
 }
