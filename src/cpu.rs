@@ -180,6 +180,10 @@ impl CPU {
                 0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
                     self.cmp(opcode);
                 }
+                // CPX
+                0xE0 | 0xE4 | 0xEC => {
+                    self.cpx(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -508,25 +512,33 @@ impl CPU {
         self.program_counter += instruction.size as u16 - 1;
     }
 
-    fn cmp(&mut self, opcode: u8) {
+    fn compare(&mut self, opcode: u8, register: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
         let operand = self.mem_read(address);
 
-        if self.register_a >= operand {
+        if register >= operand {
             self.set_flag(StatusFlag::Carry);
         } else {
             self.clear_flag(StatusFlag::Carry);
         }
-        if self.register_a == operand {
+        if register == operand {
             self.set_flag(StatusFlag::Zero);
         } else {
             self.clear_flag(StatusFlag::Zero);
         }
 
-        self.copy_bit_from(self.register_a.wrapping_sub(operand), StatusFlag::Negative);
+        self.copy_bit_from(register.wrapping_sub(operand), StatusFlag::Negative);
 
         self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn cmp(&mut self, opcode: u8) {
+        self.compare(opcode, self.register_a);
+    }
+
+    fn cpx(&mut self, opcode: u8) {
+        self.compare(opcode, self.register_x);
     }
 }
 
@@ -1661,6 +1673,78 @@ mod test {
         cpu.interpret();
 
         // Carry flag should be set because A (0x30) > operand (0x80)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be set because result (0x30 - 0x80) = 0xB0 is negative
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_cpx_carry_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CPX instruction with a value less than the X register
+        cpu.load(vec![0xE0, 0x10]); // CPX with immediate mode, compare with 0x10
+        cpu.reset();
+        cpu.register_x = 0x20; // Set X to 0x20 (32 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set because X (0x20) > operand (0x10)
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_cpx_zero_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CPX instruction with a value equal to the X register
+        cpu.load(vec![0xE0, 0x10]); // CPX with immediate mode
+        cpu.reset();
+        cpu.register_x = 0x10; // Set X to 0x10 (16 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be set
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Zero flag should be set because X == operand
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_cpx_negative_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the CPX instruction with a value greater than the X register
+        cpu.load(vec![0xE0, 0x20]); // CPX with immediate mode
+        cpu.reset();
+        cpu.register_x = 0x10; // Set X to 0x10 (16 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be clear because X (0x10) < operand (0x20)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be set because X - operand is negative
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_cpx_carry_flag_clear() {
+        let mut cpu = CPU::new();
+
+        // Load the CPX instruction with a value that makes the result negative
+        cpu.load(vec![0xE0, 0x80]); // CPX with immediate mode
+        cpu.reset();
+        cpu.register_x = 0x30; // Set X to 0x30 (48 in decimal)
+        cpu.interpret();
+
+        // Carry flag should be clear because X (0x30) < operand (0x80)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
         // Zero flag should be clear
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);

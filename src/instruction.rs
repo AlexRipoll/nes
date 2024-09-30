@@ -29,6 +29,7 @@ enum Mnemonic {
     CLI,
     CLV,
     CMP,
+    CPX,
     LDA,
     STA,
     TAX,
@@ -382,6 +383,28 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 5,
+            },
+            // CPX
+            0xE0 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CPX,
+                mode: AddressingMode::Immediate,
+                size: 2,
+                cycles: 2,
+            },
+            0xE4 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CPX,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 3,
+            },
+            0xEC => Instruction {
+                opcode,
+                mnemonic: Mnemonic::CPX,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 4,
             },
             // LDA
             0xA9 => Instruction {
