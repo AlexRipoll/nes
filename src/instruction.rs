@@ -23,6 +23,7 @@ enum Mnemonic {
     STA,
     TAX,
     INC,
+    BNE,
 }
 
 #[derive(Debug)]
@@ -240,6 +241,14 @@ impl From<u8> for Instruction {
             0x30 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::BMI,
+                mode: AddressingMode::Relative,
+                size: 2,
+                cycles: 2, // +1 if branch succeeds +2 if to a new page)
+            },
+            // BMI
+            0xD0 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::BNE,
                 mode: AddressingMode::Relative,
                 size: 2,
                 cycles: 2, // +1 if branch succeeds +2 if to a new page)

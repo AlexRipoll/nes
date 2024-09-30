@@ -132,6 +132,8 @@ impl CPU {
                 0x24 | 0x2C => self.bit(opcode),
                 // BMI
                 0x30 => self.bmi(opcode),
+                // BNE
+                0xD0 => self.bne(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -356,13 +358,10 @@ impl CPU {
         let offset = self.operand_address(&instruction.mode).unwrap() as i8;
         self.program_counter += instruction.size as u16 - 1;
 
-        println!("=> {:X}", self.program_counter);
         if condition {
-            println!("OFFSET {}", offset);
             // jump to address
             self.program_counter = self.program_counter.wrapping_add(offset as u16);
         }
-        println!("=> {}", self.program_counter);
     }
 
     fn bcc(&mut self, opcode: u8) {
@@ -396,6 +395,10 @@ impl CPU {
 
     fn bmi(&mut self, opcode: u8) {
         self.branch(opcode, self.is_flag_set(StatusFlag::Negative));
+    }
+
+    fn bne(&mut self, opcode: u8) {
+        self.branch(opcode, !self.is_flag_set(StatusFlag::Zero));
     }
 }
 
@@ -1167,6 +1170,56 @@ mod test {
 
             // The program counter should NOT jump, it should just move to the next instruction (opcode + operand + BRK)
             assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
+        }
+
+        #[test]
+        fn test_bne_branch_forward() {
+            let mut cpu = CPU::new();
+
+            // Load the BNE instruction with a positive offset (+4)
+            cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
+            cpu.reset();
+            let initial_pc = cpu.program_counter;
+            cpu.interpret();
+
+            // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
+            assert_eq!(
+                cpu.program_counter,
+                initial_pc.wrapping_add(2).wrapping_add(5)
+            );
+        }
+
+        #[test]
+        fn test_bne_no_branch_when_zero_set() {
+            let mut cpu = CPU::new();
+
+            // Load the BEQ instruction with a positive offset (+4)
+            cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
+            cpu.reset();
+            cpu.set_flag(StatusFlag::Zero);
+            let initial_pc = cpu.program_counter;
+            cpu.interpret();
+
+            // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
+            assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
+        }
+
+        #[test]
+        fn test_bne_branch_backward() {
+            let mut cpu = CPU::new();
+
+            // Load the BEQ instruction with a negative offset (-2)
+            cpu.load(vec![0xD0, 0xFD]); // BNE (0xD0) with offset -2 (0xFE in two's complement is -2)
+            cpu.reset();
+            // Set the Zero flag (so the branch should occur)
+            let initial_pc = cpu.program_counter;
+            cpu.interpret();
+
+            // The program counter should jump backward by 2 + 1 (BRK)
+            assert_eq!(
+                cpu.program_counter,
+                initial_pc.wrapping_add(2).wrapping_sub(3).wrapping_add(1)
+            );
         }
     }
 }
