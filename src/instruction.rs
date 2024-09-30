@@ -31,6 +31,7 @@ enum Mnemonic {
     CMP,
     CPX,
     CPY,
+    DEC,
     LDA,
     STA,
     TAX,
@@ -428,6 +429,35 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Absolute,
                 size: 3,
                 cycles: 4,
+            },
+            // DEC
+            0xC6 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DEC,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 5,
+            },
+            0xD6 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DEC,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 6,
+            },
+            0xCE => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DEC,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 6,
+            },
+            0xDE => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DEC,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 7,
             },
             // LDA
             0xA9 => Instruction {

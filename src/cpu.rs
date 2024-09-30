@@ -188,6 +188,10 @@ impl CPU {
                 0xC0 | 0xC4 | 0xCC => {
                     self.cpy(opcode);
                 }
+                // DEC
+                0xC6 | 0xD6 | 0xCE | 0xDE => {
+                    self.dec(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -547,6 +551,19 @@ impl CPU {
 
     fn cpy(&mut self, opcode: u8) {
         self.compare(opcode, self.register_y);
+    }
+
+    fn dec(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        let res = operand.wrapping_sub(1);
+        self.mem_write(address, res);
+
+        self.set_zero_and_negative_flags(res);
+
+        self.program_counter += instruction.size as u16 - 1;
     }
 }
 
@@ -1830,5 +1847,65 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
         // Negative flag should be set because the result (Y - operand) is negative
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_dec_zero_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the DEC instruction to decrement memory at 0x10
+        cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
+        cpu.reset();
+        cpu.mem_write(0x10, 0x01); // Write 0x01 to memory location 0x10
+        cpu.interpret();
+
+        // Memory at 0x10 should be decremented from 0x01 to 0x00
+        assert_eq!(cpu.mem_read(0x10), 0x00);
+
+        // Zero flag should be set because the result is zero
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_dec_negative_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the DEC instruction to decrement memory at 0x10
+        cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
+        cpu.reset();
+        cpu.mem_write(0x10, 0x00); // Write 0x00 to memory location 0x10
+        cpu.interpret();
+
+        // Memory at 0x10 should be decremented from 0x00 to 0xFF
+        assert_eq!(cpu.mem_read(0x10), 0xFF);
+
+        // Zero flag should be clear because the result is not zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be set because the result (0xFF) is negative
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_dec_positive_result() {
+        let mut cpu = CPU::new();
+
+        // Load the DEC instruction to decrement memory at 0x10
+        cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
+        cpu.reset();
+        cpu.mem_write(0x10, 0x05); // Write 0x05 to memory location 0x10
+        cpu.interpret();
+
+        // Memory at 0x10 should be decremented from 0x05 to 0x04
+        assert_eq!(cpu.mem_read(0x10), 0x04);
+
+        // Zero flag should be clear because the result is not zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because the result (0x04) is positive
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
     }
 }
