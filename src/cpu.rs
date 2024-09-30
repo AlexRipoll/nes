@@ -174,6 +174,8 @@ impl CPU {
                 0xD8 => self.cld(opcode),
                 // CLI
                 0x58 => self.cli(opcode),
+                // CLV
+                0xB8 => self.clv(opcode),
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -491,6 +493,13 @@ impl CPU {
     fn cli(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Interrupt);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn clv(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.clear_flag(StatusFlag::Overflow);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -1545,5 +1554,20 @@ mod test {
         cpu.interpret();
 
         assert!(cpu.status & StatusFlag::Interrupt as u8 == 0);
+    }
+
+    #[test]
+    fn test_clv_instruction() {
+        let mut cpu = CPU::new();
+
+        // Load the CLV instruction (opcode 0xB8)
+        cpu.load(vec![0xB8]);
+        cpu.reset();
+        // Set the Overflow flag before running CLV
+        cpu.set_flag(StatusFlag::Overflow);
+        assert!(cpu.status & StatusFlag::Overflow as u8 != 0); // Ensure Overflow flag is set
+        cpu.interpret();
+
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
     }
 }
