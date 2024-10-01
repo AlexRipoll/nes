@@ -204,6 +204,10 @@ impl CPU {
                 0xE6 | 0xF6 | 0xEE | 0xFE => {
                     self.inc(opcode);
                 }
+                // INX
+                0xE8 => {
+                    self.inx(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -215,10 +219,6 @@ impl CPU {
                 // TAX
                 0xAA => {
                     self.tax(opcode);
-                }
-                // INX
-                0xE8 => {
-                    self.inx(opcode);
                 }
                 // BRK
                 0x00 => {
@@ -327,14 +327,6 @@ impl CPU {
     fn tax(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_a;
-        self.set_zero_and_negative_flags(self.register_x);
-
-        self.program_counter += instruction.size as u16 - 1;
-    }
-
-    fn inx(&mut self, opcode: u8) {
-        let instruction = Instruction::from(opcode);
-        self.register_x = self.register_x.wrapping_add(1);
         self.set_zero_and_negative_flags(self.register_x);
 
         self.program_counter += instruction.size as u16 - 1;
@@ -617,6 +609,14 @@ impl CPU {
         self.mem_write(address, res);
 
         self.set_zero_and_negative_flags(res);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn inx(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_x = self.register_x.wrapping_add(1);
+        self.set_zero_and_negative_flags(self.register_x);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2217,5 +2217,43 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
         // Negative flag should be set (result is negative)
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_inx_x_register() {
+        let mut cpu = CPU::new();
+
+        // Load the INC instruction for the X register
+        cpu.load(vec![0xE8]); // INC X
+        cpu.reset();
+        cpu.register_x = 0x10; // Set X to 0x10
+        cpu.interpret();
+
+        // The value in the X register should be incremented to 0x11
+        assert_eq!(cpu.register_x, 0x11);
+
+        // Zero flag should be clear (result is not zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear (result is not negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_inx_zero_result() {
+        let mut cpu = CPU::new();
+
+        // Load the INC instruction for the X register
+        cpu.load(vec![0xE8]); // INC X
+        cpu.reset();
+        cpu.register_x = 0xFF; // Set X to 0xFF (will wrap to 0x00)
+        cpu.interpret();
+
+        // The value in the X register should be incremented to 0x00
+        assert_eq!(cpu.register_x, 0x00);
+
+        // Zero flag should be set (result is zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
     }
 }

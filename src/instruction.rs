@@ -565,6 +565,14 @@ impl From<u8> for Instruction {
                 size: 3,
                 cycles: 7,
             },
+            // INX
+            0xE8 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INX,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
+            },
             // LDA
             0xA9 => Instruction {
                 opcode,
@@ -676,14 +684,6 @@ impl From<u8> for Instruction {
             0xAA => Instruction {
                 opcode,
                 mnemonic: Mnemonic::TAX,
-                mode: AddressingMode::Implied,
-                size: 1,
-                cycles: 2,
-            },
-            // INX
-            0xE8 => Instruction {
-                opcode,
-                mnemonic: Mnemonic::INX,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,
