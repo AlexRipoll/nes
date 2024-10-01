@@ -113,6 +113,20 @@ impl CPU {
         self.mem_read(stack_address)
     }
 
+    fn stack_push_u16(&mut self, data: u16) {
+        let msb = (data >> 8) as u8;
+        let lsb = (data & 0xff) as u8;
+        self.stack_push(msb);
+        self.stack_push(lsb);
+    }
+
+    fn stack_pop_u16(&mut self) -> u16 {
+        let lsb = self.stack_pop() as u16;
+        let msb = self.stack_pop() as u16;
+
+        msb << 8 | lsb
+    }
+
     fn load(&mut self, program: Vec<u8>) {
         self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program);
         self.mem_write_u16(0xFFFC, 0x8000);
@@ -215,6 +229,10 @@ impl CPU {
                 // JMP
                 0x4C | 0x6C => {
                     self.jmp(opcode);
+                }
+                // JSR
+                0x20 => {
+                    self.jsr(opcode);
                 }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
@@ -652,6 +670,16 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
 
         self.program_counter = address;
+    }
+
+    fn jsr(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let subroutine_address = self.operand_address(&instruction.mode).unwrap();
+
+        self.stack_push_u16(self.program_counter + 2 - 1);
+        println!("=>> {:X}", self.program_counter + 2 - 1);
+
+        self.program_counter = subroutine_address;
     }
 }
 
@@ -2371,5 +2399,42 @@ mod test {
 
         // Assert that the program counter is updated to the target address ($1234) +1 (BRK), not $12XX
         assert_eq!(cpu.program_counter, 0x1235);
+    }
+
+    #[test]
+    fn test_jsr_jumps_to_subroutine() {
+        let mut cpu = CPU::new();
+
+        // Load a JSR instruction with target address $1234
+        cpu.load(vec![0x20, 0x34, 0x12]); // JSR $1234
+        cpu.reset();
+        // Capture the initial state before JSR execution
+        let initial_pc = cpu.program_counter;
+        cpu.interpret();
+
+        // After JSR, PC should be set to the target address $1234 + 1 (BRK)
+        assert_eq!(cpu.program_counter, 0x1235);
+
+        // Ensure the return address (initial_pc + 2) is pushed onto the stack
+        // The return address is (initial_pc + 2). he return address pushed onto the stack is the
+        // address of the last byte of the JSR instruction (which is the second byte of the
+        // address), not the address of the next instruction.
+        let return_address = initial_pc + 2;
+        assert_eq!(cpu.stack_pop_u16(), return_address);
+    }
+
+    #[test]
+    fn test_jsr_updates_stack_pointer() {
+        let mut cpu = CPU::new();
+
+        // Load a JSR instruction
+        cpu.load(vec![0x20, 0x34, 0x12]); // JSR $1234
+        cpu.reset();
+        // CApture the initial stack pointer value
+        let initial_sp = cpu.stack_ptr;
+        cpu.interpret();
+
+        // The stack pointer should be decremented by 2 after pushing the return address
+        assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(2));
     }
 }

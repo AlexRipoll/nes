@@ -39,6 +39,7 @@ enum Mnemonic {
     INX,
     INY,
     JMP,
+    JSR,
     LDA,
     STA,
     TAX,
@@ -597,6 +598,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect,
                 size: 3,
                 cycles: 5,
+            },
+            // JSR
+            0x20 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::JSR,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 6,
             },
             // LDA
             0xA9 => Instruction {
