@@ -38,6 +38,7 @@ enum Mnemonic {
     INC,
     INX,
     INY,
+    JMP,
     LDA,
     STA,
     TAX,
@@ -581,6 +582,21 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,
+            },
+            // JMP
+            0x4C => Instruction {
+                opcode,
+                mnemonic: Mnemonic::JMP,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 3,
+            },
+            0x6C => Instruction {
+                opcode,
+                mnemonic: Mnemonic::JMP,
+                mode: AddressingMode::Indirect,
+                size: 3,
+                cycles: 5,
             },
             // LDA
             0xA9 => Instruction {

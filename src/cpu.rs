@@ -212,6 +212,10 @@ impl CPU {
                 0xC8 => {
                     self.iny(opcode);
                 }
+                // JMP
+                0x4C | 0x6C => {
+                    self.jmp(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -263,12 +267,22 @@ impl CPU {
                 let address = operand.wrapping_add(self.register_y as u16);
                 Some(address)
             }
+            // The original 6502 CPU has a bug when fetching the target address in indirect jumps if the pointer falls on a page
+            // boundary (e.g., addresses ending with $FF, such as $xxFF, where xx can be any value from $00 to $FF). In these cases,
+            // the CPU correctly retrieves the least significant byte (LSB) from the expected address ($xxFF), but it mistakenly obtains
+            // the most significant byte (MSB) from the start of the same page ($xx00).
             AddressingMode::Indirect => {
-                let operand = self.mem_read(self.program_counter);
+                let operand = self.mem_read_u16(self.program_counter);
 
-                let lsb = self.mem_read(operand as u16);
-                let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
-                Some((msb as u16) << 8 | (lsb as u16))
+                let address = if operand & 0x00FF == 0x00FF {
+                    let lsb = self.mem_read(operand);
+                    let msb = self.mem_read(operand & 0xFF00);
+                    (msb as u16) << 8 | (lsb as u16)
+                } else {
+                    self.mem_read_u16(operand)
+                };
+
+                Some(address)
             }
             AddressingMode::Indirect_X => {
                 let operand = self.mem_read(self.program_counter);
@@ -631,6 +645,13 @@ impl CPU {
         self.set_zero_and_negative_flags(self.register_y);
 
         self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn jmp(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+
+        self.program_counter = address;
     }
 }
 
@@ -2305,5 +2326,50 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 != 0);
         // Negative flag should be clear
         assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_jmp_absolute() {
+        let mut cpu = CPU::new();
+
+        // Load memory with JMP absolute instruction (0x4C) and target address $1234
+        cpu.load(vec![0x4C, 0x34, 0x12]); // JMP $1234
+        cpu.reset();
+        cpu.interpret();
+
+        // Assert that the program counter is updated to the target address ($1234) + 1 BRK
+        assert_eq!(cpu.program_counter, 0x1235);
+    }
+
+    #[test]
+    fn test_jmp_indirect() {
+        let mut cpu = CPU::new();
+
+        // Load memory with JMP indirect instruction (0x6C) and pointer $0120
+        cpu.load(vec![0x6C, 0x20, 0x01]); // JMP ($0120)
+        cpu.reset();
+        // Set the memory location $0120 to point to $1234
+        cpu.mem_write(0x0120, 0x34); // Low byte of target address
+        cpu.mem_write(0x0121, 0x12); // High byte of target address
+        cpu.interpret();
+
+        // Assert that the program counter is updated to the target address ($1234) + 1 BRK
+        assert_eq!(cpu.program_counter, 0x1235);
+    }
+
+    #[test]
+    fn test_jmp_indirect_page_boundary_bug() {
+        let mut cpu = CPU::new();
+
+        // Load memory with JMP indirect instruction (0x6C) and pointer $01FF
+        cpu.load(vec![0x6C, 0xFF, 0x01]); // JMP ($01FF)
+        cpu.reset();
+        // Set the memory location $01FF to 0x34 and simulate the bug (wrap around to $0100)
+        cpu.mem_write(0x01FF, 0x34); // Low byte of target address
+        cpu.mem_write(0x0100, 0x12); // High byte of target address (wrap around due to the bug)
+        cpu.interpret();
+
+        // Assert that the program counter is updated to the target address ($1234) +1 (BRK), not $12XX
+        assert_eq!(cpu.program_counter, 0x1235);
     }
 }
