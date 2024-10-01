@@ -43,6 +43,7 @@ enum Mnemonic {
     LDA,
     LDX,
     LDY,
+    LSR,
     STA,
     TAX,
 }
@@ -737,6 +738,42 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Absolute_X,
                 size: 3,
                 cycles: 4,
+            },
+            // LSR
+            0x4A => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LSR,
+                mode: AddressingMode::Accumulator,
+                size: 1,
+                cycles: 2,
+            },
+            0x46 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LSR,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 5,
+            },
+            0x56 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LSR,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 6,
+            },
+            0x4E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LSR,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 6,
+            },
+            0x5E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LSR,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 7,
             },
             // STA
             0x85 => Instruction {

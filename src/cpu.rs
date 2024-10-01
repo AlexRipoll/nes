@@ -246,6 +246,10 @@ impl CPU {
                 0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
                     self.ldy(opcode);
                 }
+                // LSR
+                0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+                    self.lsr(opcode);
+                }
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -708,6 +712,38 @@ impl CPU {
         self.register_y = value;
 
         self.set_zero_and_negative_flags(self.register_y);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn lsr(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        match instruction.mode {
+            AddressingMode::Accumulator => {
+                if self.register_a & 0b0000_0001 != 0 {
+                    self.set_flag(StatusFlag::Carry);
+                } else {
+                    self.clear_flag(StatusFlag::Carry);
+                }
+
+                self.register_a = self.register_a >> 1;
+                self.set_zero_and_negative_flags(self.register_a);
+            }
+            _ => {
+                let address = self.operand_address(&instruction.mode).unwrap();
+                let operand = self.mem_read(address);
+
+                if self.register_a & 0b0000_0001 != 0 {
+                    self.set_flag(StatusFlag::Carry);
+                } else {
+                    self.clear_flag(StatusFlag::Carry);
+                }
+
+                let res = operand >> 1;
+                self.mem_write(address, res);
+                self.set_zero_and_negative_flags(res);
+            }
+        }
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2622,5 +2658,98 @@ mod test {
 
         // Negative flag should be set because Y is negative (bit 7 is 1)
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_lsr_accumulator() {
+        let mut cpu = CPU::new();
+
+        // Load the LSR instruction for Accumulator mode
+        cpu.load(vec![0x4A]); // LSR A
+        cpu.reset();
+        cpu.register_a = 0x04; // Set the accumulator to 0x04 (binary: 00000100)
+        cpu.interpret();
+
+        // Accumulator should be shifted right (0x04 >> 1 = 0x02)
+        assert_eq!(cpu.register_a, 0x02);
+
+        // Carry flag should be clear because bit 0 of 0x04 is 0
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+
+        // Zero flag should be clear because the result is not zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because bit 7 is 0
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_lsr_carry_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the LSR instruction for Accumulator mode
+        cpu.load(vec![0x4A]); // LSR A
+        cpu.reset();
+        cpu.register_a = 0x03; // Set the accumulator to 0x03 (binary: 00000011)
+        cpu.interpret();
+
+        // Accumulator should be shifted right (0x03 >> 1 = 0x01)
+        assert_eq!(cpu.register_a, 0x01);
+
+        // Carry flag should be set because bit 0 of 0x03 is 1
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+
+        // Zero flag should be clear because the result is not zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because bit 7 is 0
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_lsr_zero_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the LSR instruction for Accumulator mode
+        cpu.load(vec![0x4A]); // LSR A
+        cpu.reset();
+        cpu.register_a = 0x01; // Set the accumulator to 0x01 (binary: 00000001)
+        cpu.interpret();
+
+        // Accumulator should be shifted right (0x01 >> 1 = 0x00)
+        assert_eq!(cpu.register_a, 0x00);
+
+        // Carry flag should be set because bit 0 of 0x01 is 1
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+
+        // Zero flag should be set because the result is 0
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+
+        // Negative flag should be clear because bit 7 is 0
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_lsr_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load the LSR instruction for Zero Page mode
+        cpu.load(vec![0x46, 0x10]); // LSR $10
+        cpu.reset();
+        // Write a value to Zero Page memory at address 0x10
+        cpu.mem_write(0x10, 0x08); // Set memory[0x10] = 0x08 (binary: 00001000)
+        cpu.interpret();
+
+        // The value at 0x10 should be shifted right (0x08 >> 1 = 0x04)
+        assert_eq!(cpu.mem_read(0x10), 0x04);
+
+        // Carry flag should be clear because bit 0 of 0x08 is 0
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+
+        // Zero flag should be clear because the result is not zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because bit 7 is 0
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
     }
 }
