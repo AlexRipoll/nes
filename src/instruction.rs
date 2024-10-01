@@ -41,6 +41,7 @@ enum Mnemonic {
     JMP,
     JSR,
     LDA,
+    LDX,
     STA,
     TAX,
 }
@@ -663,6 +664,42 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 5,
+            },
+            // LDX
+            0xA2 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LDX,
+                mode: AddressingMode::Immediate,
+                size: 2,
+                cycles: 2,
+            },
+            0xA6 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LDX,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 3,
+            },
+            0xB6 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LDX,
+                mode: AddressingMode::ZeroPage_Y,
+                size: 2,
+                cycles: 4,
+            },
+            0xAE => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LDX,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 4,
+            },
+            0xBE => Instruction {
+                opcode,
+                mnemonic: Mnemonic::LDX,
+                mode: AddressingMode::Absolute_Y,
+                size: 3,
+                cycles: 4,
             },
             // STA
             0x85 => Instruction {

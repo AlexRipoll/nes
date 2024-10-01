@@ -238,6 +238,10 @@ impl CPU {
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
                 }
+                // LDX
+                0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
+                    self.ldx(opcode);
+                }
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -341,17 +345,6 @@ impl CPU {
 }
 
 impl CPU {
-    fn lda(&mut self, opcode: u8) {
-        let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
-        let value = self.mem_read(address);
-        self.register_a = value;
-
-        self.set_zero_and_negative_flags(self.register_a);
-
-        self.program_counter += instruction.size as u16 - 1;
-    }
-
     fn sta(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
@@ -680,6 +673,28 @@ impl CPU {
         println!("=>> {:X}", self.program_counter + 2 - 1);
 
         self.program_counter = subroutine_address;
+    }
+
+    fn lda(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let value = self.mem_read(address);
+        self.register_a = value;
+
+        self.set_zero_and_negative_flags(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn ldx(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let value = self.mem_read(address);
+        self.register_x = value;
+
+        self.set_zero_and_negative_flags(self.register_x);
+
+        self.program_counter += instruction.size as u16 - 1;
     }
 }
 
@@ -2436,5 +2451,83 @@ mod test {
 
         // The stack pointer should be decremented by 2 after pushing the return address
         assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(2));
+    }
+
+    #[test]
+    fn test_ldx_immediate() {
+        let mut cpu = CPU::new();
+
+        // Load the LDX instruction with Immediate mode and a value to load into X
+        cpu.load(vec![0xA2, 0x10]); // LDX #$10
+        cpu.reset();
+        cpu.interpret();
+
+        // X register should be loaded with 0x10
+        assert_eq!(cpu.register_x, 0x10);
+
+        // Zero flag should be clear because X != 0
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because X is positive (bit 7 is 0)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ldx_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load the LDX instruction with Zero Page mode
+        cpu.load(vec![0xA6, 0x10]); // LDX $10
+        cpu.reset();
+        // Load a value into memory at zero page address 0x10
+        cpu.mem_write(0x10, 0x20);
+        cpu.interpret();
+
+        // X register should be loaded with 0x20
+        assert_eq!(cpu.register_x, 0x20);
+
+        // Zero flag should be clear because X != 0
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because X is positive (bit 7 is 0)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ldx_zero_flag() {
+        let mut cpu = CPU::new();
+
+        // Load the LDX instruction with Immediate mode and a value of 0
+        cpu.load(vec![0xA2, 0x00]); // LDX #$00
+        cpu.reset();
+        cpu.interpret();
+
+        // X register should be loaded with 0x00
+        assert_eq!(cpu.register_x, 0x00);
+
+        // Zero flag should be set because X == 0
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+
+        // Negative flag should be clear because X is not negative (bit 7 is 0)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ldx_negative_flag() {
+        let mut cpu = CPU::new();
+
+        // Load the LDX instruction with Immediate mode and a value with bit 7 set (negative number)
+        cpu.load(vec![0xA2, 0xFF]); // LDX #$FF
+        cpu.reset();
+        cpu.interpret();
+
+        // X register should be loaded with 0xFF
+        assert_eq!(cpu.register_x, 0xFF);
+
+        // Zero flag should be clear because X != 0
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be set because X is negative (bit 7 is 1)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }
