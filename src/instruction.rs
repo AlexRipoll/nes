@@ -37,6 +37,7 @@ enum Mnemonic {
     EOR,
     INC,
     INX,
+    INY,
     LDA,
     STA,
     TAX,
@@ -569,6 +570,14 @@ impl From<u8> for Instruction {
             0xE8 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::INX,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
+            },
+            // INY
+            0xC8 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INY,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,
