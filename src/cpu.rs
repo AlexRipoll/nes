@@ -242,6 +242,10 @@ impl CPU {
                 0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
                     self.ldx(opcode);
                 }
+                // LDY
+                0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
+                    self.ldy(opcode);
+                }
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -693,6 +697,17 @@ impl CPU {
         self.register_x = value;
 
         self.set_zero_and_negative_flags(self.register_x);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn ldy(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let value = self.mem_read(address);
+        self.register_y = value;
+
+        self.set_zero_and_negative_flags(self.register_y);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2528,6 +2543,84 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
 
         // Negative flag should be set because X is negative (bit 7 is 1)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_ldy_immediate() {
+        let mut cpu = CPU::new();
+
+        // Load the LDY instruction with Immediate mode and a value to load into Y
+        cpu.load(vec![0xA0, 0x10]); // LDY #$10
+        cpu.reset();
+        cpu.interpret();
+
+        // Y register should be loaded with 0x10
+        assert_eq!(cpu.register_y, 0x10);
+
+        // Zero flag should be clear because Y != 0
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because Y is positive (bit 7 is 0)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ldy_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load the LDY instruction with Zero Page mode
+        cpu.load(vec![0xA4, 0x10]); // LDY $10
+        cpu.reset();
+        // Load a value into memory at zero page address 0x10
+        cpu.mem_write(0x10, 0x20);
+        cpu.interpret();
+
+        // Y register should be loaded with 0x20
+        assert_eq!(cpu.register_y, 0x20);
+
+        // Zero flag should be clear because Y != 0
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because Y is positive (bit 7 is 0)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ldy_zero_flag() {
+        let mut cpu = CPU::new();
+
+        // Load the LDY instruction with Immediate mode and a value of 0
+        cpu.load(vec![0xA0, 0x00]); // LDY #$00
+        cpu.reset();
+        cpu.interpret();
+
+        // Y register should be loaded with 0x00
+        assert_eq!(cpu.register_y, 0x00);
+
+        // Zero flag should be set because Y == 0
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+
+        // Negative flag should be clear because Y is not negative (bit 7 is 0)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ldy_negative_flag() {
+        let mut cpu = CPU::new();
+
+        // Load the LDY instruction with Immediate mode and a value with bit 7 set (negative number)
+        cpu.load(vec![0xA0, 0xFF]); // LDY #$FF
+        cpu.reset();
+        cpu.interpret();
+
+        // Y register should be loaded with 0xFF
+        assert_eq!(cpu.register_y, 0xFF);
+
+        // Zero flag should be clear because Y != 0
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be set because Y is negative (bit 7 is 1)
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }
