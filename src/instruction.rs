@@ -35,10 +35,11 @@ enum Mnemonic {
     DEX,
     DEY,
     EOR,
+    INC,
+    INX,
     LDA,
     STA,
     TAX,
-    INC,
 }
 
 #[derive(Debug)]
@@ -535,6 +536,35 @@ impl From<u8> for Instruction {
                 size: 2,
                 cycles: 5,
             },
+            // INC
+            0xE6 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INC,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 5,
+            },
+            0xF6 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INC,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 6,
+            },
+            0xEE => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INC,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 6,
+            },
+            0xFE => Instruction {
+                opcode,
+                mnemonic: Mnemonic::INC,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 7,
+            },
             // LDA
             0xA9 => Instruction {
                 opcode,
@@ -650,10 +680,10 @@ impl From<u8> for Instruction {
                 size: 1,
                 cycles: 2,
             },
-            // INC
+            // INX
             0xE8 => Instruction {
                 opcode,
-                mnemonic: Mnemonic::INC,
+                mnemonic: Mnemonic::INX,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,

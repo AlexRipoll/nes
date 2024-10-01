@@ -200,6 +200,10 @@ impl CPU {
                 0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
                     self.eor(opcode);
                 }
+                // INC
+                0xE6 | 0xF6 | 0xEE | 0xFE => {
+                    self.inc(opcode);
+                }
                 // LDA
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(opcode);
@@ -212,9 +216,9 @@ impl CPU {
                 0xAA => {
                     self.tax(opcode);
                 }
-                // INC
+                // INX
                 0xE8 => {
-                    self.inc(opcode);
+                    self.inx(opcode);
                 }
                 // BRK
                 0x00 => {
@@ -328,7 +332,7 @@ impl CPU {
         self.program_counter += instruction.size as u16 - 1;
     }
 
-    fn inc(&mut self, opcode: u8) {
+    fn inx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_x.wrapping_add(1);
         self.set_zero_and_negative_flags(self.register_x);
@@ -600,6 +604,19 @@ impl CPU {
         self.register_a ^= operand;
 
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn inc(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        let res = operand.wrapping_add(1);
+        self.mem_write(address, res);
+
+        self.set_zero_and_negative_flags(res);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2140,5 +2157,65 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
         // Negative flag should be clear
         assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_inc_memory() {
+        let mut cpu = CPU::new();
+
+        // Load the INC instruction for Zero Page addressing
+        cpu.load(vec![0xE6, 0x20]); // INC $20
+        cpu.reset();
+        // Write an initial value of 0x10 to memory location 0x20
+        cpu.mem_write(0x20, 0x10);
+        cpu.interpret();
+
+        // The value at memory location 0x20 should be incremented to 0x11
+        assert_eq!(cpu.mem_read(0x20), 0x11);
+
+        // Zero flag should be clear (result is not zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be clear (result is not negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_inc_memory_zero_result() {
+        let mut cpu = CPU::new();
+
+        // Load the INC instruction for Zero Page addressing
+        cpu.load(vec![0xE6, 0x20]); // INC $20
+        cpu.reset();
+        // Write an initial value of 0xFF to memory location 0x20 (incrementing will wrap around)
+        cpu.mem_write(0x20, 0xFF);
+        cpu.interpret();
+
+        // The value at memory location 0x20 should be incremented to 0x00 (wraps around)
+        assert_eq!(cpu.mem_read(0x20), 0x00);
+
+        // Zero flag should be set (result is zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Negative flag should be clear
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_inc_memory_negative_result() {
+        let mut cpu = CPU::new();
+
+        // Load the INC instruction for Zero Page addressing
+        cpu.load(vec![0xE6, 0x20]); // INC $20
+        cpu.reset();
+        // Write an initial value of 0x7F to memory location 0x20
+        cpu.mem_write(0x20, 0x7F);
+        cpu.interpret();
+
+        // The value at memory location 0x20 should be incremented to 0x80
+        assert_eq!(cpu.mem_read(0x20), 0x80);
+
+        // Zero flag should be clear
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Negative flag should be set (result is negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }
