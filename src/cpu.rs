@@ -256,6 +256,8 @@ impl CPU {
                 0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
                     self.ora(opcode);
                 }
+                // PHA
+                0x48 => self.pha(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -768,6 +770,14 @@ impl CPU {
         self.register_a |= operand;
 
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn pha(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        self.stack_push(self.register_a);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2891,5 +2901,24 @@ mod test {
 
         // Negative flag should be set because the result is negative (0x80 has the high bit set)
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_pha() {
+        let mut cpu = CPU::new();
+
+        // Load the PHA instruction (0x48)
+        cpu.load(vec![0x48]); // PHA (Push Accumulator)
+        cpu.reset();
+        cpu.register_a = 0x42; // Set accumulator to 0x42
+        let initial_sp = cpu.stack_ptr; // Store the initial stack pointer
+        cpu.interpret();
+
+        // The accumulator value should be pushed onto the stack
+        let stack_address = 0x0100 + initial_sp as u16;
+        assert_eq!(cpu.mem_read(stack_address), 0x42);
+
+        // The stack pointer should be decremented by 1
+        assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(1));
     }
 }

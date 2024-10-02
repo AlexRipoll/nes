@@ -46,6 +46,7 @@ enum Mnemonic {
     LSR,
     NOP,
     ORA,
+    PHA,
     STA,
     TAX,
 }
@@ -841,6 +842,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 5,
+            },
+            // PHA
+            0x48 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::PHA,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 3,
             },
             // STA
             0x85 => Instruction {
