@@ -275,6 +275,8 @@ impl CPU {
                 }
                 // RTI
                 0x40 => self.rti(opcode),
+                // RTS
+                0x60 => self.rts(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -880,6 +882,15 @@ impl CPU {
 
         self.status = self.stack_pop();
         self.program_counter = self.stack_pop_u16();
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn rts(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        // According to the 6502 specification, after pulling the address from the stack, the program counter should be incremented by 1.
+        self.program_counter = self.stack_pop_u16() + 1;
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3381,7 +3392,7 @@ mod test {
     }
 
     #[test]
-    fn test_rti1() {
+    fn test_rti() {
         let mut cpu = CPU::new();
 
         // Execute RTI instruction
@@ -3411,5 +3422,25 @@ mod test {
 
         // Check that the processor status is restored
         assert_eq!(cpu.status, 0b10000011); // Both Carry and Zero flags should be set
+    }
+
+    #[test]
+    fn test_rts() {
+        let mut cpu = CPU::new();
+
+        // Execute RTS instruction
+        cpu.load(vec![0x60]); // Load RTS opcode
+        cpu.reset();
+
+        // Simulate pushing a return address onto the stack
+        cpu.stack_ptr = 0xF1;
+
+        // Push the status onto the stack
+        cpu.mem_write(0x01F2, 0x34); // High byte of return address (0x0034)
+        cpu.mem_write(0x01F3, 0x12); // Low byte of return address (0x1234)
+        cpu.interpret();
+
+        // Check that the program counter is set to the return address + 1 (from spec) + 1 (BRK)
+        assert_eq!(cpu.program_counter, 0x1236);
     }
 }

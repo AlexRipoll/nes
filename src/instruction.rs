@@ -53,6 +53,7 @@ enum Mnemonic {
     ROL,
     ROR,
     RTI,
+    RTS,
     STA,
     TAX,
 }
@@ -953,10 +954,18 @@ impl From<u8> for Instruction {
                 size: 3,
                 cycles: 7,
             },
-            // RIT
+            // RTI
             0x40 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::RTI,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 6,
+            },
+            // RTS
+            0x60 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RTS,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 6,
