@@ -252,6 +252,10 @@ impl CPU {
                 }
                 // NOP
                 0xEA => self.nop(opcode),
+                // ORA
+                0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
+                    self.ora(opcode);
+                }
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -752,6 +756,18 @@ impl CPU {
 
     fn nop(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn ora(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        self.register_a |= operand;
+
+        self.set_zero_and_negative_flags(self.register_a);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2793,5 +2809,87 @@ mod test {
 
         // No flags should be modified, so we check if the status register remains the same
         assert_eq!(cpu.status, 0);
+    }
+
+    #[test]
+    fn test_ora_zero_result() {
+        let mut cpu = CPU::new();
+
+        // Load the ORA instruction (0x09) with immediate addressing mode
+        cpu.load(vec![0x09, 0x00]); // ORA #$00 (A | 0x00)
+        cpu.reset();
+        cpu.register_a = 0x00; // Set accumulator to 0x00
+        cpu.interpret();
+
+        // The result should be 0x00 (0x00 | 0x00 = 0x00)
+        assert_eq!(cpu.register_a, 0x00);
+
+        // Zero flag should be set because the result is zero
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+
+        // Negative flag should be clear because the result is not negative
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ora_non_zero_result() {
+        let mut cpu = CPU::new();
+
+        // Load the ORA instruction (0x09) with immediate addressing mode
+        cpu.load(vec![0x09, 0x0F]); // ORA #$0F (A | 0x0F)
+        cpu.reset();
+        cpu.register_a = 0xF0; // Set accumulator to 0xF0
+        cpu.interpret();
+
+        // The result should be 0xFF (0xF0 | 0x0F = 0xFF)
+        assert_eq!(cpu.register_a, 0xFF);
+
+        // Zero flag should be clear because the result is not zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be set because the result is negative (0xFF has the high bit set)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_ora_zero_flag_clear() {
+        let mut cpu = CPU::new();
+
+        // Load the ORA instruction (0x09) with immediate addressing mode
+        cpu.load(vec![0x09, 0x0F]); // ORA #$0F
+        cpu.reset();
+
+        cpu.register_a = 0x10; // Set accumulator to 0x10
+
+        cpu.interpret();
+
+        // The result should be 0x1F (0x10 | 0x0F = 0x1F)
+        assert_eq!(cpu.register_a, 0x1F);
+
+        // Zero flag should be clear because the result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be clear because the result is positive
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_ora_negative_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load the ORA instruction (0x09) with immediate addressing mode
+        cpu.load(vec![0x09, 0x80]); // ORA #$80 (A | 0x80)
+        cpu.reset();
+        cpu.register_a = 0x00; // Set accumulator to 0x00
+        cpu.interpret();
+
+        // The result should be 0x80 (0x00 | 0x80 = 0x80)
+        assert_eq!(cpu.register_a, 0x80);
+
+        // Zero flag should be clear because the result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+
+        // Negative flag should be set because the result is negative (0x80 has the high bit set)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }

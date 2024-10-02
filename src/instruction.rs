@@ -45,6 +45,7 @@ enum Mnemonic {
     LDY,
     LSR,
     NOP,
+    ORA,
     STA,
     TAX,
 }
@@ -783,6 +784,63 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,
+            },
+            // ORA
+            0x09 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::Immediate,
+                size: 2,
+                cycles: 2,
+            },
+            0x05 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 3,
+            },
+            0x15 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 4,
+            },
+            0x0D => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 4,
+            },
+            0x1D => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 4,
+            },
+            0x19 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::Absolute_Y,
+                size: 3,
+                cycles: 4,
+            },
+            0x01 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::Indirect_X,
+                size: 2,
+                cycles: 6,
+            },
+            0x11 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ORA,
+                mode: AddressingMode::Indirect_Y,
+                size: 2,
+                cycles: 5,
             },
             // STA
             0x85 => Instruction {
