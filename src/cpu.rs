@@ -258,6 +258,8 @@ impl CPU {
                 }
                 // PHA
                 0x48 => self.pha(opcode),
+                // PHP
+                0x08 => self.php(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -778,6 +780,14 @@ impl CPU {
         let instruction = Instruction::from(opcode);
 
         self.stack_push(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn php(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        self.stack_push(self.status);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2917,6 +2927,33 @@ mod test {
         // The accumulator value should be pushed onto the stack
         let stack_address = 0x0100 + initial_sp as u16;
         assert_eq!(cpu.mem_read(stack_address), 0x42);
+
+        // The stack pointer should be decremented by 1
+        assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(1));
+    }
+
+    #[test]
+    fn test_php() {
+        let mut cpu = CPU::new();
+
+        // Load the PHP instruction (0x08)
+        cpu.load(vec![0x08]); // PHP (Push Processor Status)
+        cpu.reset();
+        // Set some status flags: Carry, Zero, and Negative
+        cpu.set_flag(StatusFlag::Carry);
+        cpu.set_flag(StatusFlag::Zero);
+        cpu.set_flag(StatusFlag::Negative);
+
+        let initial_sp = cpu.stack_ptr; // Store the initial stack pointer
+        cpu.interpret();
+
+        // The status register should be pushed onto the stack
+        let pushed_status = cpu.mem_read(0x0100 + initial_sp as u16);
+        let expected_status =
+            StatusFlag::Carry as u8 | StatusFlag::Zero as u8 | StatusFlag::Negative as u8;
+
+        // Assert the pushed status includes all set flags plus the Break flag
+        assert_eq!(pushed_status, expected_status);
 
         // The stack pointer should be decremented by 1
         assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(1));

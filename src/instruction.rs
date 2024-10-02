@@ -47,6 +47,7 @@ enum Mnemonic {
     NOP,
     ORA,
     PHA,
+    PHP,
     STA,
     TAX,
 }
@@ -847,6 +848,14 @@ impl From<u8> for Instruction {
             0x48 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::PHA,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 3,
+            },
+            // PHP
+            0x08 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::PHP,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 3,
