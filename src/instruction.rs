@@ -51,6 +51,7 @@ enum Mnemonic {
     PLA,
     PLP,
     ROL,
+    ROR,
     STA,
     TAX,
 }
@@ -911,6 +912,42 @@ impl From<u8> for Instruction {
             0x3E => Instruction {
                 opcode,
                 mnemonic: Mnemonic::ROL,
+                mode: AddressingMode::Absolute_X,
+                size: 3,
+                cycles: 7,
+            },
+            // ROR
+            0x6A => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ROR,
+                mode: AddressingMode::Accumulator,
+                size: 1,
+                cycles: 2,
+            },
+            0x66 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ROR,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 5,
+            },
+            0x76 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ROR,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 6,
+            },
+            0x6E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ROR,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 6,
+            },
+            0x7E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::ROR,
                 mode: AddressingMode::Absolute_X,
                 size: 3,
                 cycles: 7,
