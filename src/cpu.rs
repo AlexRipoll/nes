@@ -1,4 +1,5 @@
 use core::panic;
+use std::os::linux::raw::stat;
 
 use crate::instruction::{AddressingMode, Instruction};
 
@@ -264,6 +265,10 @@ impl CPU {
                 0x68 => self.pla(opcode),
                 // PLP
                 0x28 => self.plp(opcode),
+                // ROL
+                0x2A | 0x26 | 0x36 | 0x2E | 0x3E => {
+                    self.rol(opcode);
+                }
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -692,7 +697,6 @@ impl CPU {
         let subroutine_address = self.operand_address(&instruction.mode).unwrap();
 
         self.stack_push_u16(self.program_counter + 2 - 1);
-        println!("=>> {:X}", self.program_counter + 2 - 1);
 
         self.program_counter = subroutine_address;
     }
@@ -809,6 +813,32 @@ impl CPU {
         let instruction = Instruction::from(opcode);
 
         self.status = self.stack_pop();
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn rol(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        match instruction.mode {
+            AddressingMode::Accumulator => {
+                let old_accumulator = self.register_a;
+
+                self.register_a = (self.register_a << 1) | (self.status & 0b0000_0001);
+                self.copy_bit_from(old_accumulator >> 7, StatusFlag::Carry);
+
+                self.set_zero_and_negative_flags(self.register_a);
+            }
+            _ => {
+                let address = self.operand_address(&instruction.mode).unwrap();
+                let operand = self.mem_read(address);
+
+                let rotated_operand = (operand << 1) | (self.status & 0b0000_0001);
+                self.copy_bit_from(operand >> 7, StatusFlag::Carry);
+                self.mem_write(address, rotated_operand);
+
+                self.set_zero_and_negative_flags(rotated_operand);
+            }
+        }
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3051,5 +3081,137 @@ mod test {
 
         // The processor status register should now contain the value pulled from the stack
         assert_eq!(cpu.status, status_to_pull);
+    }
+
+    #[test]
+    fn test_rol_accumulator_no_carry() {
+        let mut cpu = CPU::new();
+
+        // Load ROL instruction for Accumulator mode (0x2A)
+        cpu.load(vec![0x2A]); // ROL Accumulator
+        cpu.reset();
+        cpu.register_a = 0b01010101; // Initial value in accumulator (0x55)
+        cpu.clear_flag(StatusFlag::Carry); // Ensure the Carry flag is clear
+        cpu.interpret();
+
+        // After ROL, the value should shift left, and LSB should be 0
+        assert_eq!(cpu.register_a, 0b10101010); // Result should be 0xAA
+
+        // Carry flag should be clear since the MSB was 0
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be set because MSB of result is 1
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear since result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+    }
+
+    #[test]
+    fn test_rol_accumulator_with_carry() {
+        let mut cpu = CPU::new();
+
+        // Load ROL instruction for Accumulator mode (0x2A)
+        cpu.load(vec![0x2A]); // ROL Accumulator
+        cpu.reset();
+        cpu.register_a = 0b11010101; // Initial value in accumulator (0xD5)
+        cpu.clear_flag(StatusFlag::Carry); // Ensure the Carry flag is clear
+        cpu.interpret();
+
+        // After ROL, the value should shift left, and MSB will go to the Carry flag
+        assert_eq!(cpu.register_a, 0b10101010); // Result should be 0xAA
+
+        // Carry flag should be set since the MSB was 1 before rotation
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Negative flag should be set because MSB of result is 1
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear since result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+    }
+
+    #[test]
+    fn test_rol_accumulator_with_existing_carry() {
+        let mut cpu = CPU::new();
+
+        // Load ROL instruction for Accumulator mode (0x2A)
+        cpu.load(vec![0x2A]); // ROL Accumulator
+        cpu.reset();
+        cpu.register_a = 0b01010101; // Initial value in accumulator (0x55)
+        cpu.set_flag(StatusFlag::Carry); // Set Carry flag
+        cpu.interpret();
+
+        // After ROL, the value should shift left, and Carry flag value should be placed into the LSB
+        assert_eq!(cpu.register_a, 0b10101011); // Result should be 0xAB
+
+        // Carry flag should be clear since the MSB was 0
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be set because MSB of result is 1
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear since result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+    }
+
+    #[test]
+    fn test_rol_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load ROL instruction for Zero Page mode (0x26)
+        cpu.load(vec![0x26, 0x10]); // ROL Zero Page address 0x10
+        cpu.reset();
+        cpu.mem_write(0x10, 0b01010101); // Initial value in memory (0x55)
+        cpu.clear_flag(StatusFlag::Carry); // Ensure the Carry flag is clear
+        cpu.interpret();
+
+        // After ROL, the value should shift left, and LSB should be 0
+        assert_eq!(cpu.mem_read(0x10), 0b10101010); // Result should be
+
+        // Carry flag should be clear since the MSB was 0
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be set because MSB of result is 1
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear since result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+    }
+
+    #[test]
+    fn test_rol_zero_page_with_carry() {
+        let mut cpu = CPU::new();
+
+        // Load ROL instruction for Zero Page mode (0x26)
+        cpu.load(vec![0x26, 0x10]); // ROL Zero Page address 0x10
+        cpu.reset();
+        cpu.mem_write(0x10, 0b11010101); // Initial value in memory (0xD5)
+        cpu.clear_flag(StatusFlag::Carry); // Ensure the Carry flag is clear
+        cpu.interpret();
+
+        // After ROL, the value should shift left, and MSB will go to the Carry flag
+        assert_eq!(cpu.mem_read(0x10), 0b10101010); // Result should be 0xAA
+
+        // Carry flag should be set since the MSB was 1 before rotation
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Negative flag should be set because MSB of result is 1
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear since result is non-zero
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+    }
+
+    #[test]
+    fn test_rol_zero_flag_set() {
+        let mut cpu = CPU::new();
+
+        // Load ROL instruction for Accumulator mode (0x2A)
+        cpu.load(vec![0x2A]); // ROL Accumulator
+        cpu.reset();
+        cpu.register_a = 0b00000000; // Initial value in accumulator (0x00)
+        cpu.clear_flag(StatusFlag::Carry); // Ensure the Carry flag is clear
+        cpu.interpret();
+
+        // After ROL, the value is still zero
+        assert_eq!(cpu.register_a, 0b00000000); // Result should be 0x00
+
+        // Carry flag should be clear since the MSB was 0
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be clear since the MSB is 0
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+        // Zero flag should be set because result is zero
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
     }
 }
