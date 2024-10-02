@@ -273,6 +273,8 @@ impl CPU {
                 0x6A | 0x66 | 0x76 | 0x6E | 0x7E => {
                     self.ror(opcode);
                 }
+                // RTI
+                0x40 => self.rti(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -869,6 +871,15 @@ impl CPU {
                 self.set_zero_and_negative_flags(rotated_operand);
             }
         }
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn rti(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        self.status = self.stack_pop();
+        self.program_counter = self.stack_pop_u16();
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3367,5 +3378,38 @@ mod test {
         assert!(cpu.status & StatusFlag::Negative as u8 == 0);
         // Zero flag should be set because result is zero
         assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+    }
+
+    #[test]
+    fn test_rti1() {
+        let mut cpu = CPU::new();
+
+        // Execute RTI instruction
+        cpu.load(vec![0x40]); // Load RTI opcode
+        cpu.reset();
+        // Set processor status flags
+        cpu.set_flag(StatusFlag::Carry);
+        cpu.set_flag(StatusFlag::Zero); // Set Zero flag
+        cpu.set_flag(StatusFlag::Negative); // Set Negative flag
+
+        // Simulate pushing a return address onto the stack
+        cpu.stack_ptr = 0xF0;
+
+        // Push the status onto the stack
+        cpu.mem_write(0x01F1, cpu.status); // Push status
+        cpu.mem_write(0x01F2, 0x34); // High byte of return address (0x0034)
+        cpu.mem_write(0x01F3, 0x12); // Low byte of return address (0x1234)
+
+        // Clear some flags
+        cpu.clear_flag(StatusFlag::Carry);
+        cpu.clear_flag(StatusFlag::Zero);
+        cpu.clear_flag(StatusFlag::Negative);
+        cpu.interpret();
+
+        // Check that the program counter is set to the return address + 1 (BRK)
+        assert_eq!(cpu.program_counter, 0x1235);
+
+        // Check that the processor status is restored
+        assert_eq!(cpu.status, 0b10000011); // Both Carry and Zero flags should be set
     }
 }

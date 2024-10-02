@@ -52,6 +52,7 @@ enum Mnemonic {
     PLP,
     ROL,
     ROR,
+    RTI,
     STA,
     TAX,
 }
@@ -951,6 +952,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Absolute_X,
                 size: 3,
                 cycles: 7,
+            },
+            // RIT
+            0x40 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RTI,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 6,
             },
             // STA
             0x85 => Instruction {
