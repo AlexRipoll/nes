@@ -49,6 +49,7 @@ enum Mnemonic {
     PHA,
     PHP,
     PLA,
+    PLP,
     STA,
     TAX,
 }
@@ -865,6 +866,14 @@ impl From<u8> for Instruction {
             0x68 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::PLA,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 4,
+            },
+            // PLP
+            0x28 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::PLP,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 4,

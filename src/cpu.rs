@@ -262,6 +262,8 @@ impl CPU {
                 0x08 => self.php(opcode),
                 // PLA
                 0x68 => self.pla(opcode),
+                // PLP
+                0x28 => self.plp(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -799,6 +801,14 @@ impl CPU {
 
         self.register_a = self.stack_pop();
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn plp(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        self.status = self.stack_pop();
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3022,5 +3032,24 @@ mod test {
         // Accumulator should now be 0x80, and the Negative flag should be set
         assert_eq!(cpu.register_a, 0x80);
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+    }
+
+    #[test]
+    fn test_plp() {
+        let mut cpu = CPU::new();
+
+        // Load the PLP instruction (0x28)
+        cpu.load(vec![0x28]); // PLP (Pull Processor Status)
+        cpu.reset();
+        cpu.status = 0b0001_0011;
+
+        // Push a value onto the stack that we will later pull into the processor status
+        let status_to_pull = 0b1100_0110; // Example value with some flags set
+        cpu.stack_ptr = 0xFD; // Set the stack pointer to a position where we simulate the value is stored
+        cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, status_to_pull);
+        cpu.interpret();
+
+        // The processor status register should now contain the value pulled from the stack
+        assert_eq!(cpu.status, status_to_pull);
     }
 }
