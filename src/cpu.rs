@@ -250,6 +250,8 @@ impl CPU {
                 0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
                     self.lsr(opcode);
                 }
+                // NOP
+                0xEA => self.nop(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -744,6 +746,12 @@ impl CPU {
                 self.set_zero_and_negative_flags(res);
             }
         }
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn nop(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2751,5 +2759,39 @@ mod test {
 
         // Negative flag should be clear because bit 7 is 0
         assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+    }
+
+    #[test]
+    fn test_nop() {
+        let mut cpu = CPU::new();
+
+        // Load the NOP instruction (0xEA) into the program memory
+        cpu.load(vec![0xEA]); // NOP
+        cpu.reset();
+        let initial_pc = cpu.program_counter; // Save the initial program counter
+        cpu.interpret();
+
+        // The program counter should increment by 1 (NOP is a 1-byte instruction) + 1 (BRK)
+        assert_eq!(cpu.program_counter, initial_pc + 2);
+
+        // No flags should be modified, so we check if the status register remains the same
+        assert_eq!(cpu.status, 0);
+    }
+
+    #[test]
+    fn test_nop_multiple() {
+        let mut cpu = CPU::new();
+
+        // Load multiple NOP instructions into the program memory
+        cpu.load(vec![0xEA, 0xEA, 0xEA]); // NOP, NOP, NOP
+        cpu.reset();
+        let initial_pc = cpu.program_counter; // Save the initial program counter
+        cpu.interpret();
+
+        // The program counter should increment by 3 (since we executed 3 NOPs) + 1 (BRK)
+        assert_eq!(cpu.program_counter, initial_pc + 4);
+
+        // No flags should be modified, so we check if the status register remains the same
+        assert_eq!(cpu.status, 0);
     }
 }

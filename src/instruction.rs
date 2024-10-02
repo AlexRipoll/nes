@@ -44,6 +44,7 @@ enum Mnemonic {
     LDX,
     LDY,
     LSR,
+    NOP,
     STA,
     TAX,
 }
@@ -774,6 +775,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Absolute_X,
                 size: 3,
                 cycles: 7,
+            },
+            // NOP
+            0xEA => Instruction {
+                opcode,
+                mnemonic: Mnemonic::NOP,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
             },
             // STA
             0x85 => Instruction {
