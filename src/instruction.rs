@@ -48,6 +48,7 @@ enum Mnemonic {
     ORA,
     PHA,
     PHP,
+    PLA,
     STA,
     TAX,
 }
@@ -859,6 +860,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 3,
+            },
+            // PLA
+            0x68 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::PLA,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 4,
             },
             // STA
             0x85 => Instruction {

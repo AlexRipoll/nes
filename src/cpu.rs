@@ -260,6 +260,8 @@ impl CPU {
                 0x48 => self.pha(opcode),
                 // PHP
                 0x08 => self.php(opcode),
+                // PLA
+                0x68 => self.pla(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -788,6 +790,15 @@ impl CPU {
         let instruction = Instruction::from(opcode);
 
         self.stack_push(self.status);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn pla(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+
+        self.register_a = self.stack_pop();
+        self.set_zero_and_negative_flags(self.register_a);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -2957,5 +2968,59 @@ mod test {
 
         // The stack pointer should be decremented by 1
         assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(1));
+    }
+
+    #[test]
+    fn test_pla_pulls_value_from_stack() {
+        let mut cpu = CPU::new();
+
+        // Load the PLA instruction (0x68)
+        cpu.load(vec![0x68]); // PLA (Pull Accumulator)
+        cpu.reset();
+        let initial_sp = cpu.stack_ptr; // Store the initial stack pointer
+        let value_to_pull = 0x42; // Manually push a value onto the stack (simulating a previous PHA or other operation)
+        cpu.stack_ptr = 0xFD; // Set the stack pointer to a position where the value is stored
+        cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, value_to_pull);
+        cpu.interpret();
+
+        // The accumulator should now contain the value that was on the stack
+        assert_eq!(cpu.register_a, value_to_pull);
+
+        // The stack pointer should be incremented by 1
+        assert_eq!(cpu.stack_ptr, initial_sp.wrapping_add(1));
+    }
+
+    #[test]
+    fn test_pla_sets_zero_flag() {
+        let mut cpu = CPU::new();
+
+        // Load the PLA instruction (0x68)
+        cpu.load(vec![0x68]); // PLA (Pull Accumulator)
+        cpu.reset();
+        // Push 0x00 onto the stack to simulate a value previously placed there
+        cpu.stack_ptr = 0xFD;
+        cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, 0x00); // Push 0x00 onto the stack
+        cpu.interpret();
+
+        // Accumulator should be 0, and the Zero flag should be set
+        assert_eq!(cpu.register_a, 0x00);
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+    }
+
+    #[test]
+    fn test_pla_sets_negative_flag() {
+        let mut cpu = CPU::new();
+
+        // Load the PLA instruction (0x68)
+        cpu.load(vec![0x68]); // PLA (Pull Accumulator)
+        cpu.reset();
+        // Push a negative value (e.g., 0x80) onto the stack to simulate a value previously placed there
+        cpu.stack_ptr = 0xFD;
+        cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, 0x80); // Push 0x80 (signed -128) onto the stack
+        cpu.interpret();
+
+        // Accumulator should now be 0x80, and the Negative flag should be set
+        assert_eq!(cpu.register_a, 0x80);
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
     }
 }
