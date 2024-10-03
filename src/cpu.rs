@@ -1,5 +1,4 @@
 use core::panic;
-use std::{os::linux::raw::stat, u16};
 
 use crate::instruction::{AddressingMode, Instruction};
 
@@ -303,6 +302,10 @@ impl CPU {
                 0xAA => {
                     self.tax(opcode);
                 }
+                // TAY
+                0xA8 => {
+                    self.tay(opcode);
+                }
                 // BRK
                 0x00 => {
                     // self.brk();
@@ -398,14 +401,6 @@ impl CPU {
 }
 
 impl CPU {
-    fn tax(&mut self, opcode: u8) {
-        let instruction = Instruction::from(opcode);
-        self.register_x = self.register_a;
-        self.set_zero_and_negative_flags(self.register_x);
-
-        self.program_counter += instruction.size as u16 - 1;
-    }
-
     fn adc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
@@ -994,6 +989,22 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
         self.mem_write(address, self.register_y);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn tax(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_x = self.register_a;
+        self.set_zero_and_negative_flags(self.register_x);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn tay(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_y = self.register_a;
+        self.set_zero_and_negative_flags(self.register_y);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3846,5 +3857,19 @@ mod test {
 
         // The memory address 0x2000 should now contain the value from the Y register (0x99)
         assert_eq!(cpu.mem_read(0x2000), 0x99);
+    }
+
+    #[test]
+    fn test_tay() {
+        let mut cpu = CPU::new();
+
+        // Load TAY instruction (0xA8)
+        cpu.load(vec![0xA8]); // TAY
+        cpu.reset();
+        cpu.register_a = 0x42; // Set accumulator to 0x42
+        cpu.interpret();
+
+        // After TAY, the Y register should now be equal to the accumulator
+        assert_eq!(cpu.register_y, 0x42);
     }
 }
