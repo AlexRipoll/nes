@@ -60,6 +60,7 @@ enum Mnemonic {
     SEI,
     STA,
     STX,
+    STY,
     TAX,
 }
 
@@ -1122,6 +1123,28 @@ impl From<u8> for Instruction {
                 cycles: 4,
             },
             0x8E => Instruction {
+                opcode,
+                mnemonic: Mnemonic::STX,
+                mode: AddressingMode::Absolute,
+                size: 3,
+                cycles: 4,
+            },
+            // STX
+            0x84 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::STX,
+                mode: AddressingMode::ZeroPage,
+                size: 2,
+                cycles: 3,
+            },
+            0x94 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::STX,
+                mode: AddressingMode::ZeroPage_X,
+                size: 2,
+                cycles: 4,
+            },
+            0x8C => Instruction {
                 opcode,
                 mnemonic: Mnemonic::STX,
                 mode: AddressingMode::Absolute,

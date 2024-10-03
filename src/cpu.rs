@@ -295,6 +295,10 @@ impl CPU {
                 0x86 | 0x96 | 0x8E => {
                     self.stx(opcode);
                 }
+                // STY
+                0x84 | 0x94 | 0x8C => {
+                    self.sty(opcode);
+                }
                 // TAX
                 0xAA => {
                     self.tax(opcode);
@@ -982,6 +986,14 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode).unwrap();
         self.mem_write(address, self.register_x);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn sty(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        self.mem_write(address, self.register_y);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3790,6 +3802,49 @@ mod test {
         cpu.interpret();
 
         // The memory address 0x2000 should now contain the value from the X register (0x99)
+        assert_eq!(cpu.mem_read(0x2000), 0x99);
+    }
+
+    #[test]
+    fn test_sty_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load STY instruction for Zero Page mode (0x84)
+        cpu.load(vec![0x84, 0x10]); // STY $10 (store Y register at memory address 0x10)
+        cpu.reset();
+        cpu.register_y = 0x42; // Set Y register to 0x42
+        cpu.interpret();
+
+        // The memory address 0x10 should now contain the value from the Y register (0x42)
+        assert_eq!(cpu.mem_read(0x10), 0x42);
+    }
+
+    #[test]
+    fn test_sty_zero_page_x() {
+        let mut cpu = CPU::new();
+
+        // Load STY instruction for Zero Page,X mode (0x94)
+        cpu.load(vec![0x94, 0x10]); // STY $10,X (store Y register at memory address 0x10 + X)
+        cpu.reset();
+        cpu.register_y = 0x55; // Set Y register to 0x55
+        cpu.register_x = 0x03; // Set X register to 0x03
+        cpu.interpret();
+
+        // The memory address 0x13 (0x10 + 0x03) should now contain the value from the Y register (0x55)
+        assert_eq!(cpu.mem_read(0x13), 0x55);
+    }
+
+    #[test]
+    fn test_sty_absolute() {
+        let mut cpu = CPU::new();
+
+        // Load STY instruction for Absolute mode (0x8C)
+        cpu.load(vec![0x8C, 0x00, 0x20]); // STY $2000 (store Y register at memory address 0x2000)
+        cpu.reset();
+        cpu.register_y = 0x99; // Set Y register to 0x99
+        cpu.interpret();
+
+        // The memory address 0x2000 should now contain the value from the Y register (0x99)
         assert_eq!(cpu.mem_read(0x2000), 0x99);
     }
 }
