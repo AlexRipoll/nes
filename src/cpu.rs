@@ -283,6 +283,8 @@ impl CPU {
                 }
                 // SEC
                 0x38 => self.sec(opcode),
+                // SED
+                0xF8 => self.sed(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -952,6 +954,13 @@ impl CPU {
     fn sec(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Carry);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn sed(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.set_flag(StatusFlag::Decimal);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3664,5 +3673,19 @@ mod test {
 
         // The carry flag should be set after executing SEC
         assert!(cpu.is_flag_set(StatusFlag::Carry));
+    }
+
+    #[test]
+    fn test_sed() {
+        let mut cpu = CPU::new();
+
+        // Load SED instruction (0xF8)
+        cpu.load(vec![0xF8]); // SED
+        cpu.reset();
+        cpu.clear_flag(StatusFlag::Decimal); // Ensure the decimal flag is initially clear
+        cpu.interpret();
+
+        // The decimal flag should be set after executing SED
+        assert!(cpu.is_flag_set(StatusFlag::Decimal));
     }
 }
