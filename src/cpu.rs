@@ -3709,4 +3709,32 @@ mod test {
         // The interrupt disable flag should be set after executing SEI
         assert!(cpu.is_flag_set(StatusFlag::Interrupt));
     }
+
+    #[test]
+    fn test_sta_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load STA instruction for Zero Page mode (0x85)
+        cpu.load(vec![0x85, 0x10]); // STA $10 (store A register at memory address 0x10)
+        cpu.reset();
+        cpu.register_a = 0x42; // Set A register to 0x42
+        cpu.interpret();
+
+        // The memory address 0x10 should now contain the value from the A register (0x42)
+        assert_eq!(cpu.mem_read(0x10), 0x42);
+    }
+
+    #[test]
+    fn test_sta_absolute() {
+        let mut cpu = CPU::new();
+
+        // Load STA instruction for Absolute mode (0x8D)
+        cpu.load(vec![0x8D, 0x00, 0x20]); // STA $2000 (store A register at memory address 0x2000)
+        cpu.reset();
+        cpu.register_a = 0x99; // Set A register to 0x99
+        cpu.interpret();
+
+        // The memory address 0x2000 should now contain the value from the A register (0x99)
+        assert_eq!(cpu.mem_read(0x2000), 0x99);
+    }
 }
