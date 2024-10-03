@@ -63,6 +63,7 @@ enum Mnemonic {
     STY,
     TAX,
     TAY,
+    TSX,
 }
 
 #[derive(Debug)]
@@ -1164,6 +1165,14 @@ impl From<u8> for Instruction {
             0xA8 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::TAY,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
+            },
+            // TSX
+            0xBA => Instruction {
+                opcode,
+                mnemonic: Mnemonic::TSX,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,

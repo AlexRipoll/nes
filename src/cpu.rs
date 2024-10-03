@@ -306,6 +306,10 @@ impl CPU {
                 0xA8 => {
                     self.tay(opcode);
                 }
+                // TSX
+                0xBA => {
+                    self.tsx(opcode);
+                }
                 // BRK
                 0x00 => {
                     // self.brk();
@@ -1005,6 +1009,14 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         self.register_y = self.register_a;
         self.set_zero_and_negative_flags(self.register_y);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn tsx(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_x = self.stack_ptr;
+        self.set_zero_and_negative_flags(self.register_x);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3871,5 +3883,19 @@ mod test {
 
         // After TAY, the Y register should now be equal to the accumulator
         assert_eq!(cpu.register_y, 0x42);
+    }
+
+    #[test]
+    fn test_tsx() {
+        let mut cpu = CPU::new();
+
+        // Load TSX instruction (0xBA)
+        cpu.load(vec![0xBA]); // TSX
+        cpu.reset();
+        cpu.stack_ptr = 0x30; // Set stack pointer to 0x30
+        cpu.interpret();
+
+        // After TSX, the X register should now be equal to the stack pointer
+        assert_eq!(cpu.register_x, 0x30);
     }
 }
