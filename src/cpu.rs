@@ -291,6 +291,10 @@ impl CPU {
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
                 }
+                // STX
+                0x86 | 0x96 | 0x8E => {
+                    self.stx(opcode);
+                }
                 // TAX
                 0xAA => {
                     self.tax(opcode);
@@ -390,14 +394,6 @@ impl CPU {
 }
 
 impl CPU {
-    fn sta(&mut self, opcode: u8) {
-        let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
-        self.mem_write(address, self.register_a);
-
-        self.program_counter += instruction.size as u16 - 1;
-    }
-
     fn tax(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_a;
@@ -970,6 +966,22 @@ impl CPU {
     fn sei(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Interrupt);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn sta(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        self.mem_write(address, self.register_a);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn stx(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        self.mem_write(address, self.register_x);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3735,6 +3747,49 @@ mod test {
         cpu.interpret();
 
         // The memory address 0x2000 should now contain the value from the A register (0x99)
+        assert_eq!(cpu.mem_read(0x2000), 0x99);
+    }
+
+    #[test]
+    fn test_stx_zero_page() {
+        let mut cpu = CPU::new();
+
+        // Load STX instruction for Zero Page mode (0x86)
+        cpu.load(vec![0x86, 0x10]); // STX $10 (store X register at memory address 0x10)
+        cpu.reset();
+        cpu.register_x = 0x42; // Set X register to 0x42
+        cpu.interpret();
+
+        // The memory address 0x10 should now contain the value from the X register (0x42)
+        assert_eq!(cpu.mem_read(0x10), 0x42);
+    }
+
+    #[test]
+    fn test_stx_zero_page_y() {
+        let mut cpu = CPU::new();
+
+        // Load STX instruction for Zero Page,Y mode (0x96)
+        cpu.load(vec![0x96, 0x10]); // STX $10,Y (store X register at memory address 0x10 + Y)
+        cpu.reset();
+        cpu.register_x = 0x55; // Set X register to 0x55
+        cpu.register_y = 0x03; // Set Y register to 0x03
+        cpu.interpret();
+
+        // The memory address 0x13 (0x10 + 0x03) should now contain the value from the X register (0x55)
+        assert_eq!(cpu.mem_read(0x13), 0x55);
+    }
+
+    #[test]
+    fn test_stx_absolute() {
+        let mut cpu = CPU::new();
+
+        // Load STX instruction for Absolute mode (0x8E)
+        cpu.load(vec![0x8E, 0x00, 0x20]); // STX $2000 (store X register at memory address 0x2000)
+        cpu.reset();
+        cpu.register_x = 0x99; // Set X register to 0x99
+        cpu.interpret();
+
+        // The memory address 0x2000 should now contain the value from the X register (0x99)
         assert_eq!(cpu.mem_read(0x2000), 0x99);
     }
 }
