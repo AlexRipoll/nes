@@ -310,6 +310,10 @@ impl CPU {
                 0xBA => {
                     self.tsx(opcode);
                 }
+                // TSX
+                0x8A => {
+                    self.txa(opcode);
+                }
                 // BRK
                 0x00 => {
                     // self.brk();
@@ -1017,6 +1021,14 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         self.register_x = self.stack_ptr;
         self.set_zero_and_negative_flags(self.register_x);
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn txa(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.register_a = self.register_x;
+        self.set_zero_and_negative_flags(self.register_a);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3897,5 +3909,19 @@ mod test {
 
         // After TSX, the X register should now be equal to the stack pointer
         assert_eq!(cpu.register_x, 0x30);
+    }
+
+    #[test]
+    fn test_txa() {
+        let mut cpu = CPU::new();
+
+        // Load TXA instruction (0x8A)
+        cpu.load(vec![0x8A]); // TXA
+        cpu.reset();
+        cpu.register_x = 0x55; // Set X register to 0x55
+        cpu.interpret();
+
+        // After TXA, the accumulator should now be equal to the X register
+        assert_eq!(cpu.register_a, 0x55);
     }
 }
