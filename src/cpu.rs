@@ -1,5 +1,5 @@
 use core::panic;
-use std::os::linux::raw::stat;
+use std::{os::linux::raw::stat, u16};
 
 use crate::instruction::{AddressingMode, Instruction};
 
@@ -277,6 +277,10 @@ impl CPU {
                 0x40 => self.rti(opcode),
                 // RTS
                 0x60 => self.rts(opcode),
+                // SBC
+                0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
+                    self.sbc(opcode);
+                }
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -891,6 +895,54 @@ impl CPU {
 
         // According to the 6502 specification, after pulling the address from the stack, the program counter should be incremented by 1.
         self.program_counter = self.stack_pop_u16() + 1;
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn sbc(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let address = self.operand_address(&instruction.mode).unwrap();
+        let operand = self.mem_read(address);
+
+        // Perform the two's complement subtraction:
+        // A = A - M - (1 - Carry) ==> A = A + (~M) + C
+        let inverted_operand = operand ^ 0xFF; // Inverting operand for subtraction (Two's complement)
+        let result = self.register_a as u16
+            + inverted_operand as u16
+            + ((self.status & StatusFlag::Carry.to_mask()) as u16);
+
+        let accumulator_before = self.register_a;
+        self.register_a = result as u8;
+
+        // Set Carry flag (borrow didn't happen if the result is <= 255)
+        if result > 0xFF {
+            self.set_flag(StatusFlag::Carry);
+        } else {
+            self.clear_flag(StatusFlag::Carry);
+        }
+
+        // Set Zero flag (if the result is zero)
+        if self.register_a == 0 {
+            self.set_flag(StatusFlag::Zero);
+        } else {
+            self.clear_flag(StatusFlag::Zero);
+        }
+
+        // Set Overflow flag
+        // Overflow happens if the sign of the result is wrong:
+        // If A and M have opposite signs, but the result has the same sign as M
+        if ((accumulator_before ^ self.register_a) & (accumulator_before ^ operand) & 0x80) != 0 {
+            self.set_flag(StatusFlag::Overflow);
+        } else {
+            self.clear_flag(StatusFlag::Overflow);
+        }
+
+        // Set Negative flag (if the MSB of the result is set)
+        if self.register_a & 0x80 != 0 {
+            self.set_flag(StatusFlag::Negative);
+        } else {
+            self.clear_flag(StatusFlag::Negative);
+        }
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3442,5 +3494,153 @@ mod test {
 
         // Check that the program counter is set to the return address + 1 (from spec) + 1 (BRK)
         assert_eq!(cpu.program_counter, 0x1236);
+    }
+
+    #[test]
+    fn test_sbc_no_borrow() {
+        let mut cpu = CPU::new();
+
+        // SBC #$10 (immediate mode, subtract 0x10)
+        cpu.load(vec![0xE9, 0x10]); // SBC #$10
+        cpu.reset();
+        cpu.register_a = 0x20; // Set accumulator to 0x20
+        cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
+        cpu.interpret();
+
+        // After SBC: A = A - 0x10 - (1 - Carry) = 0x20 - 0x10 - 0 = 0x10
+        assert_eq!(cpu.register_a, 0x10);
+
+        // Carry flag should still be set (since no borrow happened)
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Negative flag should be clear (since result is not negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+        // Zero flag should be clear (since result is non-zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Overflow flag should be clear (no overflow in this case)
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+    }
+
+    #[test]
+    fn test_sbc_with_borrow() {
+        let mut cpu = CPU::new();
+
+        // SBC #$10 (immediate mode, subtract 0x10)
+        cpu.load(vec![0xE9, 0x10]); // SBC #$10
+        cpu.reset();
+        cpu.register_a = 0x10; // Set accumulator to 0x10
+        cpu.clear_flag(StatusFlag::Carry); // Borrow is needed (carry cleared)
+        cpu.interpret();
+
+        // After SBC: A = A - 0x10 - (1 - Carry) = 0x10 - 0x10 - 1 = 0xFF
+        assert_eq!(cpu.register_a, 0xFF);
+
+        // Carry flag should be clear (since a borrow happened)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be set (since result is negative, MSB = 1)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear (since result is non-zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Overflow flag should be clear (no overflow in this case)
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+    }
+
+    #[test]
+    fn test_sbc_with_zero_result() {
+        let mut cpu = CPU::new();
+
+        // SBC #$10 (immediate mode, subtract 0x10)
+        cpu.load(vec![0xE9, 0x10]); // SBC #$10
+        cpu.reset();
+        cpu.register_a = 0x10; // Set accumulator to 0x10
+        cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
+        cpu.interpret();
+
+        // After SBC: A = A - 0x10 - (1 - Carry) = 0x10 - 0x10 - 0 = 0x00
+        assert_eq!(cpu.register_a, 0x00);
+
+        // Carry flag should be set (since no borrow happened)
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Negative flag should be clear (since result is not negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+        // Zero flag should be set (since result is zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 != 0);
+        // Overflow flag should be clear (no overflow in this case)
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+    }
+
+    #[test]
+    fn test_sbc_with_overflow() {
+        let mut cpu = CPU::new();
+
+        // SBC #$80 (immediate mode, subtract 0x80)
+        cpu.load(vec![0xE9, 0x80]); // SBC #$80
+        cpu.reset();
+        cpu.register_a = 0x7F; // Set accumulator to 0x7F
+        cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
+        cpu.interpret();
+
+        // After SBC: A = A - 0x80 - (1 - Carry) = 0x7F - 0x80 = 0xFF
+        assert_eq!(cpu.register_a, 0xFF);
+
+        // Carry flag should be clear (since a borrow happened)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be set (since result is negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear (since result is non-zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Overflow flag should be set (signed overflow occurred)
+        assert!(cpu.status & StatusFlag::Overflow as u8 != 0);
+    }
+
+    #[test]
+    fn test_sbc_zero_page() {
+        let mut cpu = CPU::new();
+
+        // SBC $10 (Zero Page mode)
+        cpu.load(vec![0xE5, 0x10]); // SBC Zero Page address 0x10
+        cpu.reset();
+        cpu.mem_write(0x10, 0x05); // Memory at address 0x10 contains 0x05
+        cpu.register_a = 0x10; // Set accumulator to 0x10
+        cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
+
+        cpu.interpret();
+
+        // After SBC: A = A - M - (1 - Carry) = 0x10 - 0x05 = 0x0B
+        assert_eq!(cpu.register_a, 0x0B);
+
+        // Carry flag should be set (since no borrow happened)
+        assert!(cpu.status & StatusFlag::Carry as u8 != 0);
+        // Negative flag should be clear (since result is not negative)
+        assert!(cpu.status & StatusFlag::Negative as u8 == 0);
+        // Zero flag should be clear (since result is non-zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Overflow flag should be clear (no overflow in this case)
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+    }
+
+    #[test]
+    fn test_sbc_zero_page_with_borrow() {
+        let mut cpu = CPU::new();
+
+        // SBC $10 (Zero Page mode)
+        cpu.load(vec![0xE5, 0x10]); // SBC Zero Page address 0x10
+        cpu.reset();
+        cpu.mem_write(0x10, 0x10); // Memory at address 0x10 contains 0x10
+        cpu.register_a = 0x10; // Set accumulator to 0x10
+        cpu.clear_flag(StatusFlag::Carry); // Borrow is needed (carry cleared)
+
+        cpu.interpret();
+
+        // After SBC: A = A - M - (1 - Carry) = 0x10 - 0x10 - 1 = 0xFF
+        assert_eq!(cpu.register_a, 0xFF);
+
+        // Carry flag should be clear (since a borrow happened)
+        assert!(cpu.status & StatusFlag::Carry as u8 == 0);
+        // Negative flag should be set (since result is negative, MSB = 1)
+        assert!(cpu.status & StatusFlag::Negative as u8 != 0);
+        // Zero flag should be clear (since result is non-zero)
+        assert!(cpu.status & StatusFlag::Zero as u8 == 0);
+        // Overflow flag should be clear (no overflow in this case)
+        assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
     }
 }
