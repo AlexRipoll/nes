@@ -281,6 +281,8 @@ impl CPU {
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
                     self.sbc(opcode);
                 }
+                // SEC
+                0x38 => self.sec(opcode),
                 // STA
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode);
@@ -943,6 +945,13 @@ impl CPU {
         } else {
             self.clear_flag(StatusFlag::Negative);
         }
+
+        self.program_counter += instruction.size as u16 - 1;
+    }
+
+    fn sec(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        self.set_flag(StatusFlag::Carry);
 
         self.program_counter += instruction.size as u16 - 1;
     }
@@ -3642,5 +3651,18 @@ mod test {
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
         // Overflow flag should be clear (no overflow in this case)
         assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
+    }
+
+    #[test]
+    fn test_sec() {
+        let mut cpu = CPU::new();
+
+        // Load SEC instruction (0x38)
+        cpu.load(vec![0x38]); // SEC
+        cpu.reset();
+        cpu.interpret();
+
+        // The carry flag should be set after executing SEC
+        assert!(cpu.is_flag_set(StatusFlag::Carry));
     }
 }

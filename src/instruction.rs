@@ -55,6 +55,7 @@ enum Mnemonic {
     RTI,
     RTS,
     SBC,
+    SEC,
     STA,
     TAX,
 }
@@ -1027,6 +1028,14 @@ impl From<u8> for Instruction {
                 mode: AddressingMode::Indirect_Y,
                 size: 2,
                 cycles: 5,
+            },
+            // SEC
+            0x38 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SEC,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
             },
             // STA
             0x85 => Instruction {
