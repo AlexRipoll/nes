@@ -57,6 +57,7 @@ enum Mnemonic {
     SBC,
     SEC,
     SED,
+    SEI,
     STA,
     TAX,
 }
@@ -1038,10 +1039,18 @@ impl From<u8> for Instruction {
                 size: 1,
                 cycles: 2,
             },
-            // SEC
+            // SED
             0xF8 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::SED,
+                mode: AddressingMode::Implied,
+                size: 1,
+                cycles: 2,
+            },
+            // SEI
+            0x78 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SEI,
                 mode: AddressingMode::Implied,
                 size: 1,
                 cycles: 2,
