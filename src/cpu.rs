@@ -143,10 +143,17 @@ impl CPU {
     fn run(&mut self, program: Vec<u8>) {
         self.load(program);
         self.reset();
-        self.interpret();
+        self.execute_program();
     }
 
-    pub fn interpret(&mut self) {
+    pub fn execute_program(&mut self) {
+        self.execute_program_with_callback(|_| {});
+    }
+
+    pub fn execute_program_with_callback<F>(&mut self, mut callback: F)
+    where
+        F: FnMut(&mut Self),
+    {
         loop {
             let opcode = self.mem_read(self.program_counter);
             self.program_counter += 1;
@@ -329,6 +336,8 @@ impl CPU {
                 }
                 _ => panic!("Opcode not supported {:X}", opcode),
             }
+
+            callback(self);
         }
     }
 
@@ -1141,7 +1150,7 @@ mod test {
         cpu.load(vec![0xb5, 0x12, 0x00]);
         cpu.reset();
         cpu.register_x = 0x04;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x7a);
     }
 
@@ -1160,7 +1169,7 @@ mod test {
         cpu.load(vec![0xbd, 0x12, 0xaa, 0x00]);
         cpu.reset();
         cpu.register_x = 0x04;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x7a);
     }
 
@@ -1171,7 +1180,7 @@ mod test {
         cpu.load(vec![0xb9, 0x12, 0xaa, 0x00]);
         cpu.reset();
         cpu.register_y = 0x04;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x7a);
     }
 
@@ -1184,7 +1193,7 @@ mod test {
         cpu.load(vec![0xa1, 0x12, 0x00]);
         cpu.reset();
         cpu.register_x = 0x04;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x33);
     }
 
@@ -1197,7 +1206,7 @@ mod test {
         cpu.load(vec![0xa1, 0x02, 0x00]);
         cpu.reset();
         cpu.register_x = 0xff;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x33);
     }
 
@@ -1210,7 +1219,7 @@ mod test {
         cpu.load(vec![0xb1, 0x12, 0x00]);
         cpu.reset();
         cpu.register_y = 0x04;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x33);
     }
 
@@ -1223,7 +1232,7 @@ mod test {
         cpu.load(vec![0xb1, 0x12, 0x00]);
         cpu.reset();
         cpu.register_y = 0x02;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_a, 0x33);
     }
 
@@ -1233,7 +1242,7 @@ mod test {
         cpu.load(vec![0xaa, 0x00]);
         cpu.reset();
         cpu.register_a = 0x05;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_x, 0x05);
         assert!(cpu.status & 0b1000_0010 == 0);
     }
@@ -1244,7 +1253,7 @@ mod test {
         cpu.load(vec![0xaa, 0x00]);
         cpu.reset();
         cpu.register_a = 0x00;
-        cpu.interpret();
+        cpu.execute_program();
         assert!(cpu.status & 0b0000_0010 == 0b10);
     }
 
@@ -1254,7 +1263,7 @@ mod test {
         cpu.load(vec![0xaa, 0x00]);
         cpu.reset();
         cpu.register_a = 0xf5;
-        cpu.interpret();
+        cpu.execute_program();
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
     }
 
@@ -1264,7 +1273,7 @@ mod test {
         cpu.load(vec![0xe8, 0x00]);
         cpu.reset();
         cpu.register_x = 0x05;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_x, 0x06);
         assert!(cpu.status & 0b1000_0010 == 0);
     }
@@ -1275,7 +1284,7 @@ mod test {
         cpu.load(vec![0xe8, 0x00]);
         cpu.reset();
         cpu.register_x = 0xff;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_x, 0x00);
         assert!(cpu.status & 0b0000_0010 == 0b10);
     }
@@ -1286,7 +1295,7 @@ mod test {
         cpu.load(vec![0xe8, 0x00]);
         cpu.reset();
         cpu.register_x = 0xf5;
-        cpu.interpret();
+        cpu.execute_program();
         assert_eq!(cpu.register_x, 0xf6);
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
     }
@@ -1347,7 +1356,7 @@ mod test {
         cpu.load(vec![0x69, 20]);
         cpu.reset();
         cpu.register_a = 10; // A = 10
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 30); // A should be 10 + 20 = 30
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
@@ -1361,7 +1370,7 @@ mod test {
         cpu.load(vec![0x69, 100]);
         cpu.reset();
         cpu.register_a = 200;
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 44); // A should be (200 + 100) % 256 = 44
         assert_eq!(cpu.status & 0b0000_0001, 1); // Carry flag should be set
@@ -1375,7 +1384,7 @@ mod test {
         cpu.load(vec![0x69, 126]);
         cpu.reset();
         cpu.register_a = 130;
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 0); // A should be 130 + 126 = 0 (256 -> wrapped to 0)
         assert_eq!(cpu.status & 0b0000_0001, 1); // Carry flag should be set
@@ -1389,7 +1398,7 @@ mod test {
         cpu.load(vec![0x69, 1]);
         cpu.reset();
         cpu.register_a = 127; // A = 127 (positive)
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 128); // A should be 128 (negative in two's complement)
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
@@ -1403,7 +1412,7 @@ mod test {
         cpu.load(vec![0x69, 0x80]);
         cpu.reset();
         cpu.register_a = 0x80; // A = 128 (negative in two's complement)
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 0); // A should wrap to 0
         assert_eq!(cpu.status & 0b0000_0001, 1); // Carry flag should be set
@@ -1419,7 +1428,7 @@ mod test {
         cpu.reset();
         cpu.status = 0b0000_0001; // Set the carry flag to 1
         cpu.register_a = 5;
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 16); // A should be 5 + 10 + 1 (carry) = 16
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
@@ -1434,7 +1443,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0b11001100; // A = 0xCC (204 in decimal)
 
-        cpu.interpret(); // Execute AND instruction
+        cpu.execute_program(); // Execute AND instruction
 
         assert_eq!(cpu.register_a, 0b10001000); // A should now be 0x88 (136 in decimal)
         assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear (result is not zero)
@@ -1448,7 +1457,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0b11001100; // A = 0xCC (204 in decimal)
 
-        cpu.interpret(); // Execute AND instruction
+        cpu.execute_program(); // Execute AND instruction
 
         assert_eq!(cpu.register_a, 0); // A should now be 0x00
         assert_eq!(cpu.status & 0b0000_0010, 0b0000_0010); // Zero flag should be set (result is zero)
@@ -1462,7 +1471,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0b11110000; // A = 0xF0 (240 in decimal, negative in two's complement)
 
-        cpu.interpret(); // Execute AND instruction
+        cpu.execute_program(); // Execute AND instruction
 
         assert_eq!(cpu.register_a, 0b10100000); // A should now be 0xA0 (160 in decimal)
         assert_eq!(cpu.status & 0b0000_0010, 0); // Zero flag should be clear (result is not zero)
@@ -1482,7 +1491,7 @@ mod test {
         cpu.load(vec![0x0A]);
         cpu.reset();
         cpu.register_a = 0x81; // Set accumulator to 0x81
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 0x02); // Result after shift
         assert_eq!(cpu.status & 0b0000_0001, 0b0000_0001); // Carry flag should be set
@@ -1503,7 +1512,7 @@ mod test {
         cpu.load(vec![0x0A]);
         cpu.reset();
         cpu.register_a = 0x80; // Set accumulator to 0x80
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.register_a, 0x00); // Result after shift
         assert_eq!(cpu.status & 0b0000_0001, 0b0000_0001); // Carry flag should be set
@@ -1524,7 +1533,7 @@ mod test {
         cpu.load(vec![0x06, 0x10]); // ASL $10
         cpu.reset();
         cpu.mem_write(0x0010, 0x40); // Set memory at 0x10 to 0x40
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.mem_read(0x0010), 0x80); // Result after shift
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
@@ -1545,7 +1554,7 @@ mod test {
         cpu.load(vec![0x06, 0x10]); // ASL $10
         cpu.reset();
         cpu.mem_write(0x0010, 0xFF); // Set memory at 0x10 to 0xFF
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.mem_read(0x0010), 0xFE); // Result after shift
         assert_eq!(cpu.status & 0b0000_0001, 0b0000_0001); // Carry flag should be set
@@ -1566,7 +1575,7 @@ mod test {
         cpu.load(vec![0x06, 0x10]); // ASL $10
         cpu.reset();
         cpu.mem_write(0x0010, 0x01); // Set memory at 0x10 to 0x01
-        cpu.interpret();
+        cpu.execute_program();
 
         assert_eq!(cpu.mem_read(0x0010), 0x02); // Result after shift
         assert_eq!(cpu.status & 0b0000_0001, 0); // Carry flag should be clear
@@ -1587,7 +1596,7 @@ mod test {
         let initial_pc = cpu.program_counter;
 
         // Run the instruction
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only increment by 2 (BCC opcode + operand + BRK opcode),
         // since the Carry flag is set and the branch doesn't occur
@@ -1603,7 +1612,7 @@ mod test {
         cpu.reset();
 
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump forward by the offset
         assert_eq!(cpu.program_counter, initial_pc + 2 + 2 + 1); // 2-byte instruction + offset + brk
@@ -1617,7 +1626,7 @@ mod test {
         cpu.load(vec![0x90, 0xFD]); // BCC with offset -3 (0xFE is -3 in two's complement)
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // After the BCC opcode (1 byte) and the offset byte (1 byte), the program counter is at initial_pc + 3 +1 corresponding to the BRK opcode
         assert_eq!(
@@ -1636,7 +1645,7 @@ mod test {
         // Set the Carry flag (so the branch should occur)
         cpu.set_flag(StatusFlag::Carry);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should move forward by 4 (+1 for the BRK opcode) (opcode + offset + BRK)
         assert_eq!(
@@ -1653,7 +1662,7 @@ mod test {
         cpu.load(vec![0xB0, 0x04]); // BCS (0xB0) with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only move forward by 2 (for the opcode and offset) and not branch
         // +1 for the BRK
@@ -1670,7 +1679,7 @@ mod test {
         // Set the Carry flag (so the branch should occur)
         cpu.set_flag(StatusFlag::Carry);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump backward by 2 + +1 for the BRK
         assert_eq!(
@@ -1688,7 +1697,7 @@ mod test {
         cpu.reset();
         cpu.set_flag(StatusFlag::Zero);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
         assert_eq!(
@@ -1705,7 +1714,7 @@ mod test {
         cpu.load(vec![0xF0, 0x04]); // BEQ (0xF0) with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
@@ -1721,7 +1730,7 @@ mod test {
         // Set the Zero flag (so the branch should occur)
         cpu.set_flag(StatusFlag::Zero);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump backward by 2 + 1 (BRK)
         assert_eq!(
@@ -1739,7 +1748,7 @@ mod test {
         cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing (operand at 0x10)
         cpu.reset();
         cpu.register_a = 0xFF; // Set the accumulator to 0xFF
-        cpu.interpret();
+        cpu.execute_program();
 
         // Since 0xFF & 0x00 = 0, the Zero flag should be set
         assert!(cpu.status & StatusFlag::Zero as u8 != 0);
@@ -1754,7 +1763,7 @@ mod test {
         cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
         cpu.reset();
         cpu.register_a = 0xFF; // Set the accumulator to 0xFF
-        cpu.interpret();
+        cpu.execute_program();
 
         // Since memory[0x10] has bit 7 set (0x80), the Negative flag should be set
         assert!(cpu.status & StatusFlag::Negative as u8 != 0);
@@ -1769,7 +1778,7 @@ mod test {
         cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
         cpu.reset();
         cpu.register_a = 0xFF; // Set the accumulator to 0xFF
-        cpu.interpret();
+        cpu.execute_program();
 
         // Since memory[0x10] has bit 6 set (0x40), the Overflow flag should be set
         assert!(cpu.status & StatusFlag::Overflow as u8 != 0);
@@ -1784,7 +1793,7 @@ mod test {
         cpu.load(vec![0x24, 0x10]); // BIT instruction with Zero Page addressing
         cpu.reset();
         cpu.register_a = 0x01; // Set the accumulator to 0x01
-        cpu.interpret();
+        cpu.execute_program();
 
         // Since 0x01 & 0x3F != 0, Zero flag should NOT be set
         assert!(cpu.status & StatusFlag::Zero as u8 == 0);
@@ -1804,7 +1813,7 @@ mod test {
         // Set the Negative flag (so the branch should occur)
         cpu.set_flag(StatusFlag::Negative);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump forward by 12 (opcode + operand + offset (+9) + BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(12));
@@ -1818,7 +1827,7 @@ mod test {
         cpu.load(vec![0x30, 0x04]); // BMI with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should NOT jump, it should just move to the next instruction (opcode + operand + BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
@@ -1832,7 +1841,7 @@ mod test {
         cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
         assert_eq!(
@@ -1850,7 +1859,7 @@ mod test {
         cpu.reset();
         cpu.set_flag(StatusFlag::Zero);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
@@ -1864,7 +1873,7 @@ mod test {
         cpu.load(vec![0xD0, 0xFD]); // BNE (0xD0) with offset -2 (0xFE in two's complement is -2)
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump backward by 2 + 1 (BRK)
         assert_eq!(
@@ -1881,7 +1890,7 @@ mod test {
         cpu.load(vec![0x10, 0x04]); // BPL (0x10) with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
         assert_eq!(
@@ -1899,7 +1908,7 @@ mod test {
         cpu.reset();
         cpu.set_flag(StatusFlag::Negative);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
@@ -1913,7 +1922,7 @@ mod test {
         cpu.load(vec![0x10, 0xFD]); // BPL (0x10) with offset -2 (0xFE in two's complement is -2)
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump backward by 2 + 1 (BRK)
         assert_eq!(
@@ -1973,7 +1982,7 @@ mod test {
         cpu.load(vec![0x50, 0x04]); // BVC (0x50) with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
         assert_eq!(
@@ -1991,7 +2000,7 @@ mod test {
         cpu.reset();
         cpu.set_flag(StatusFlag::Overflow);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
@@ -2005,7 +2014,7 @@ mod test {
         cpu.load(vec![0x50, 0xFD]); // BVC (0x10) with offset -2 (0xFE in two's complement is -2)
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump backward by 2 + 1 (BRK)
         assert_eq!(
@@ -2023,7 +2032,7 @@ mod test {
         cpu.reset();
         cpu.set_flag(StatusFlag::Overflow);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should move forward by 4 (opcode + offset) + 1 (BRK)
         assert_eq!(
@@ -2040,7 +2049,7 @@ mod test {
         cpu.load(vec![0x70, 0x04]); // BVS (0x70) with offset +4
         cpu.reset();
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should only move forward by 2 (for the opcode and offset) and not branch + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc.wrapping_add(3));
@@ -2055,7 +2064,7 @@ mod test {
         cpu.reset();
         cpu.set_flag(StatusFlag::Overflow);
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should jump backward by 2 + 1 (BRK)
         assert_eq!(
@@ -2074,7 +2083,7 @@ mod test {
         // Set the Carry flag before running CLC
         cpu.set_flag(StatusFlag::Carry);
         assert!(cpu.status & StatusFlag::Carry as u8 != 0); // Ensure Carry flag is set
-        cpu.interpret();
+        cpu.execute_program();
 
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
     }
@@ -2089,7 +2098,7 @@ mod test {
         // Set the Carry flag before running CLC
         cpu.set_flag(StatusFlag::Decimal);
         assert!(cpu.status & StatusFlag::Decimal as u8 != 0); // Ensure Decimal flag is set
-        cpu.interpret();
+        cpu.execute_program();
 
         assert!(cpu.status & StatusFlag::Decimal as u8 == 0);
     }
@@ -2104,7 +2113,7 @@ mod test {
         // Set the Interrupt flag before running CLI
         cpu.set_flag(StatusFlag::Interrupt);
         assert!(cpu.status & StatusFlag::Interrupt as u8 != 0); // Ensure Interrupt flag is set
-        cpu.interpret();
+        cpu.execute_program();
 
         assert!(cpu.status & StatusFlag::Interrupt as u8 == 0);
     }
@@ -2119,7 +2128,7 @@ mod test {
         // Set the Overflow flag before running CLV
         cpu.set_flag(StatusFlag::Overflow);
         assert!(cpu.status & StatusFlag::Overflow as u8 != 0); // Ensure Overflow flag is set
-        cpu.interpret();
+        cpu.execute_program();
 
         assert!(cpu.status & StatusFlag::Overflow as u8 == 0);
     }
@@ -2132,7 +2141,7 @@ mod test {
         cpu.load(vec![0xC9, 0x10]); // CMP with immediate mode, compare with 0x10
         cpu.reset();
         cpu.register_a = 0x20; // Set A to 0x20 (32 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set because A (0x20) > operand (0x10)
         assert!(cpu.status & StatusFlag::Carry as u8 != 0);
@@ -2150,7 +2159,7 @@ mod test {
         cpu.load(vec![0xC9, 0x10]); // CMP with immediate mode
         cpu.reset();
         cpu.register_a = 0x10; // Set A to 0x10 (16 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set
         assert!(cpu.status & StatusFlag::Carry as u8 != 0);
@@ -2168,7 +2177,7 @@ mod test {
         cpu.load(vec![0xC9, 0x20]); // CMP with immediate mode
         cpu.reset();
         cpu.register_a = 0x10; // Set A to 0x10 (16 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be clear because A (0x10) < operand (0x20)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
@@ -2186,7 +2195,7 @@ mod test {
         cpu.load(vec![0xC9, 0x80]); // CMP with immediate mode
         cpu.reset();
         cpu.register_a = 0x30; // Set A to 0x30 (48 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set because A (0x30) > operand (0x80)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
@@ -2204,7 +2213,7 @@ mod test {
         cpu.load(vec![0xE0, 0x10]); // CPX with immediate mode, compare with 0x10
         cpu.reset();
         cpu.register_x = 0x20; // Set X to 0x20 (32 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set because X (0x20) > operand (0x10)
         assert!(cpu.status & StatusFlag::Carry as u8 != 0);
@@ -2222,7 +2231,7 @@ mod test {
         cpu.load(vec![0xE0, 0x10]); // CPX with immediate mode
         cpu.reset();
         cpu.register_x = 0x10; // Set X to 0x10 (16 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set
         assert!(cpu.status & StatusFlag::Carry as u8 != 0);
@@ -2240,7 +2249,7 @@ mod test {
         cpu.load(vec![0xE0, 0x20]); // CPX with immediate mode
         cpu.reset();
         cpu.register_x = 0x10; // Set X to 0x10 (16 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be clear because X (0x10) < operand (0x20)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
@@ -2258,7 +2267,7 @@ mod test {
         cpu.load(vec![0xE0, 0x80]); // CPX with immediate mode
         cpu.reset();
         cpu.register_x = 0x30; // Set X to 0x30 (48 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be clear because X (0x30) < operand (0x80)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
@@ -2276,7 +2285,7 @@ mod test {
         cpu.load(vec![0xC0, 0x10]); // CPY with immediate mode, compare with 0x10
         cpu.reset();
         cpu.register_y = 0x20; // Set Y to 0x20 (32 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set because Y (0x20) > operand (0x10)
         assert!(cpu.status & StatusFlag::Carry as u8 != 0);
@@ -2294,7 +2303,7 @@ mod test {
         cpu.load(vec![0xC0, 0x10]); // CPY with immediate mode
         cpu.reset();
         cpu.register_y = 0x10; // Set Y to 0x10 (16 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be set because Y == operand
         assert!(cpu.status & StatusFlag::Carry as u8 != 0);
@@ -2312,7 +2321,7 @@ mod test {
         cpu.load(vec![0xC0, 0x20]); // CPY with immediate mode
         cpu.reset();
         cpu.register_y = 0x10; // Set Y to 0x10 (16 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be clear because Y (0x10) < operand (0x20)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
@@ -2330,7 +2339,7 @@ mod test {
         cpu.load(vec![0xC0, 0x80]); // CPY with immediate mode
         cpu.reset();
         cpu.register_y = 0x30; // Set Y to 0x30 (48 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Carry flag should be clear because Y (0x30) < operand (0x80)
         assert!(cpu.status & StatusFlag::Carry as u8 == 0);
@@ -2348,7 +2357,7 @@ mod test {
         cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
         cpu.reset();
         cpu.mem_write(0x10, 0x01); // Write 0x01 to memory location 0x10
-        cpu.interpret();
+        cpu.execute_program();
 
         // Memory at 0x10 should be decremented from 0x01 to 0x00
         assert_eq!(cpu.mem_read(0x10), 0x00);
@@ -2368,7 +2377,7 @@ mod test {
         cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
         cpu.reset();
         cpu.mem_write(0x10, 0x00); // Write 0x00 to memory location 0x10
-        cpu.interpret();
+        cpu.execute_program();
 
         // Memory at 0x10 should be decremented from 0x00 to 0xFF
         assert_eq!(cpu.mem_read(0x10), 0xFF);
@@ -2388,7 +2397,7 @@ mod test {
         cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
         cpu.reset();
         cpu.mem_write(0x10, 0x05); // Write 0x05 to memory location 0x10
-        cpu.interpret();
+        cpu.execute_program();
 
         // Memory at 0x10 should be decremented from 0x05 to 0x04
         assert_eq!(cpu.mem_read(0x10), 0x04);
@@ -2408,7 +2417,7 @@ mod test {
         cpu.load(vec![0xCA]); // DEX instruction
         cpu.reset();
         cpu.register_x = 0x01; // Set X register to 0x01
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be decremented from 0x01 to 0x00
         assert_eq!(cpu.register_x, 0x00);
@@ -2428,7 +2437,7 @@ mod test {
         cpu.load(vec![0xCA]); // DEX instruction
         cpu.reset();
         cpu.register_x = 0x00; // Set X register to 0x00
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be decremented from 0x00 to 0xFF (two's complement)
         assert_eq!(cpu.register_x, 0xFF);
@@ -2448,7 +2457,7 @@ mod test {
         cpu.load(vec![0xCA]); // DEX instruction
         cpu.reset();
         cpu.register_x = 0x05; // Set X register to 0x05
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be decremented from 0x05 to 0x04
         assert_eq!(cpu.register_x, 0x04);
@@ -2468,7 +2477,7 @@ mod test {
         cpu.load(vec![0x88]); // DEY instruction
         cpu.reset();
         cpu.register_y = 0x01; // Set Y register to 0x01
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be decremented from 0x01 to 0x00
         assert_eq!(cpu.register_y, 0x00);
@@ -2488,7 +2497,7 @@ mod test {
         cpu.load(vec![0x88]); // DEY instruction
         cpu.reset();
         cpu.register_y = 0x00; // Set Y register to 0x00
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be decremented from 0x00 to 0xFF (two's complement)
         assert_eq!(cpu.register_y, 0xFF);
@@ -2508,7 +2517,7 @@ mod test {
         cpu.load(vec![0x88]); // DEY instruction
         cpu.reset();
         cpu.register_y = 0x05; // Set Y register to 0x05
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be decremented from 0x05 to 0x04
         assert_eq!(cpu.register_y, 0x04);
@@ -2528,7 +2537,7 @@ mod test {
         cpu.load(vec![0x49, 0b10101010]); // EOR #$AA
         cpu.reset();
         cpu.register_a = 0b11001100; // Set A to 0b11001100 (204 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result of 0b11001100 ^ 0b10101010 should be 0b01100110
         assert_eq!(cpu.register_a, 0b01100110);
@@ -2546,7 +2555,7 @@ mod test {
         cpu.load(vec![0x49, 0xFF]); // EOR #$FF
         cpu.reset();
         cpu.register_a = 0xFF; // Set A to 0xFF (255 in decimal)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result of 0xFF ^ 0xFF should be 0x00
         assert_eq!(cpu.register_a, 0x00);
@@ -2565,7 +2574,7 @@ mod test {
         cpu.load(vec![0x49, 0x01]); // EOR #$01
         cpu.reset();
         cpu.register_a = 0x80; // Set A to 0x80 (128 in decimal, MSB set)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result of 0x80 ^ 0x01 should be 0x81 (negative in two's complement)
         assert_eq!(cpu.register_a, 0x81);
@@ -2584,7 +2593,7 @@ mod test {
         cpu.load(vec![0x49, 0x55]); // EOR #$55
         cpu.reset();
         cpu.register_a = 0x00; // Set A to 0x00 (accumulator is zero)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result of 0x00 ^ 0x55 should be 0x55
         assert_eq!(cpu.register_a, 0x55);
@@ -2604,7 +2613,7 @@ mod test {
         cpu.reset();
         // Write an initial value of 0x10 to memory location 0x20
         cpu.mem_write(0x20, 0x10);
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value at memory location 0x20 should be incremented to 0x11
         assert_eq!(cpu.mem_read(0x20), 0x11);
@@ -2624,7 +2633,7 @@ mod test {
         cpu.reset();
         // Write an initial value of 0xFF to memory location 0x20 (incrementing will wrap around)
         cpu.mem_write(0x20, 0xFF);
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value at memory location 0x20 should be incremented to 0x00 (wraps around)
         assert_eq!(cpu.mem_read(0x20), 0x00);
@@ -2644,7 +2653,7 @@ mod test {
         cpu.reset();
         // Write an initial value of 0x7F to memory location 0x20
         cpu.mem_write(0x20, 0x7F);
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value at memory location 0x20 should be incremented to 0x80
         assert_eq!(cpu.mem_read(0x20), 0x80);
@@ -2663,7 +2672,7 @@ mod test {
         cpu.load(vec![0xE8]); // INC X
         cpu.reset();
         cpu.register_x = 0x10; // Set X to 0x10
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value in the X register should be incremented to 0x11
         assert_eq!(cpu.register_x, 0x11);
@@ -2682,7 +2691,7 @@ mod test {
         cpu.load(vec![0xE8]); // INC X
         cpu.reset();
         cpu.register_x = 0xFF; // Set X to 0xFF (will wrap to 0x00)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value in the X register should be incremented to 0x00
         assert_eq!(cpu.register_x, 0x00);
@@ -2701,7 +2710,7 @@ mod test {
         cpu.load(vec![0xC8]); // INC X
         cpu.reset();
         cpu.register_y = 0x10; // Set X to 0x10
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value in the X register should be incremented to 0x11
         assert_eq!(cpu.register_y, 0x11);
@@ -2720,7 +2729,7 @@ mod test {
         cpu.load(vec![0xC8]); // INC X
         cpu.reset();
         cpu.register_y = 0xFF; // Set X to 0xFF (will wrap to 0x00)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value in the X register should be incremented to 0x00
         assert_eq!(cpu.register_y, 0x00);
@@ -2738,7 +2747,7 @@ mod test {
         // Load memory with JMP absolute instruction (0x4C) and target address $1234
         cpu.load(vec![0x4C, 0x34, 0x12]); // JMP $1234
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // Assert that the program counter is updated to the target address ($1234) + 1 BRK
         assert_eq!(cpu.program_counter, 0x1235);
@@ -2754,7 +2763,7 @@ mod test {
         // Set the memory location $0120 to point to $1234
         cpu.mem_write(0x0120, 0x34); // Low byte of target address
         cpu.mem_write(0x0121, 0x12); // High byte of target address
-        cpu.interpret();
+        cpu.execute_program();
 
         // Assert that the program counter is updated to the target address ($1234) + 1 BRK
         assert_eq!(cpu.program_counter, 0x1235);
@@ -2770,7 +2779,7 @@ mod test {
         // Set the memory location $01FF to 0x34 and simulate the bug (wrap around to $0100)
         cpu.mem_write(0x01FF, 0x34); // Low byte of target address
         cpu.mem_write(0x0100, 0x12); // High byte of target address (wrap around due to the bug)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Assert that the program counter is updated to the target address ($1234) +1 (BRK), not $12XX
         assert_eq!(cpu.program_counter, 0x1235);
@@ -2785,7 +2794,7 @@ mod test {
         cpu.reset();
         // Capture the initial state before JSR execution
         let initial_pc = cpu.program_counter;
-        cpu.interpret();
+        cpu.execute_program();
 
         // After JSR, PC should be set to the target address $1234 + 1 (BRK)
         assert_eq!(cpu.program_counter, 0x1235);
@@ -2807,7 +2816,7 @@ mod test {
         cpu.reset();
         // CApture the initial stack pointer value
         let initial_sp = cpu.stack_ptr;
-        cpu.interpret();
+        cpu.execute_program();
 
         // The stack pointer should be decremented by 2 after pushing the return address
         assert_eq!(cpu.stack_ptr, initial_sp.wrapping_sub(2));
@@ -2820,7 +2829,7 @@ mod test {
         // Load the LDX instruction with Immediate mode and a value to load into X
         cpu.load(vec![0xA2, 0x10]); // LDX #$10
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be loaded with 0x10
         assert_eq!(cpu.register_x, 0x10);
@@ -2841,7 +2850,7 @@ mod test {
         cpu.reset();
         // Load a value into memory at zero page address 0x10
         cpu.mem_write(0x10, 0x20);
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be loaded with 0x20
         assert_eq!(cpu.register_x, 0x20);
@@ -2860,7 +2869,7 @@ mod test {
         // Load the LDX instruction with Immediate mode and a value of 0
         cpu.load(vec![0xA2, 0x00]); // LDX #$00
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be loaded with 0x00
         assert_eq!(cpu.register_x, 0x00);
@@ -2879,7 +2888,7 @@ mod test {
         // Load the LDX instruction with Immediate mode and a value with bit 7 set (negative number)
         cpu.load(vec![0xA2, 0xFF]); // LDX #$FF
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // X register should be loaded with 0xFF
         assert_eq!(cpu.register_x, 0xFF);
@@ -2898,7 +2907,7 @@ mod test {
         // Load the LDY instruction with Immediate mode and a value to load into Y
         cpu.load(vec![0xA0, 0x10]); // LDY #$10
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be loaded with 0x10
         assert_eq!(cpu.register_y, 0x10);
@@ -2919,7 +2928,7 @@ mod test {
         cpu.reset();
         // Load a value into memory at zero page address 0x10
         cpu.mem_write(0x10, 0x20);
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be loaded with 0x20
         assert_eq!(cpu.register_y, 0x20);
@@ -2938,7 +2947,7 @@ mod test {
         // Load the LDY instruction with Immediate mode and a value of 0
         cpu.load(vec![0xA0, 0x00]); // LDY #$00
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be loaded with 0x00
         assert_eq!(cpu.register_y, 0x00);
@@ -2957,7 +2966,7 @@ mod test {
         // Load the LDY instruction with Immediate mode and a value with bit 7 set (negative number)
         cpu.load(vec![0xA0, 0xFF]); // LDY #$FF
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // Y register should be loaded with 0xFF
         assert_eq!(cpu.register_y, 0xFF);
@@ -2977,7 +2986,7 @@ mod test {
         cpu.load(vec![0x4A]); // LSR A
         cpu.reset();
         cpu.register_a = 0x04; // Set the accumulator to 0x04 (binary: 00000100)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Accumulator should be shifted right (0x04 >> 1 = 0x02)
         assert_eq!(cpu.register_a, 0x02);
@@ -3000,7 +3009,7 @@ mod test {
         cpu.load(vec![0x4A]); // LSR A
         cpu.reset();
         cpu.register_a = 0x03; // Set the accumulator to 0x03 (binary: 00000011)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Accumulator should be shifted right (0x03 >> 1 = 0x01)
         assert_eq!(cpu.register_a, 0x01);
@@ -3023,7 +3032,7 @@ mod test {
         cpu.load(vec![0x4A]); // LSR A
         cpu.reset();
         cpu.register_a = 0x01; // Set the accumulator to 0x01 (binary: 00000001)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Accumulator should be shifted right (0x01 >> 1 = 0x00)
         assert_eq!(cpu.register_a, 0x00);
@@ -3047,7 +3056,7 @@ mod test {
         cpu.reset();
         // Write a value to Zero Page memory at address 0x10
         cpu.mem_write(0x10, 0x08); // Set memory[0x10] = 0x08 (binary: 00001000)
-        cpu.interpret();
+        cpu.execute_program();
 
         // The value at 0x10 should be shifted right (0x08 >> 1 = 0x04)
         assert_eq!(cpu.mem_read(0x10), 0x04);
@@ -3070,7 +3079,7 @@ mod test {
         cpu.load(vec![0xEA]); // NOP
         cpu.reset();
         let initial_pc = cpu.program_counter; // Save the initial program counter
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should increment by 1 (NOP is a 1-byte instruction) + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc + 2);
@@ -3087,7 +3096,7 @@ mod test {
         cpu.load(vec![0xEA, 0xEA, 0xEA]); // NOP, NOP, NOP
         cpu.reset();
         let initial_pc = cpu.program_counter; // Save the initial program counter
-        cpu.interpret();
+        cpu.execute_program();
 
         // The program counter should increment by 3 (since we executed 3 NOPs) + 1 (BRK)
         assert_eq!(cpu.program_counter, initial_pc + 4);
@@ -3104,7 +3113,7 @@ mod test {
         cpu.load(vec![0x09, 0x00]); // ORA #$00 (A | 0x00)
         cpu.reset();
         cpu.register_a = 0x00; // Set accumulator to 0x00
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result should be 0x00 (0x00 | 0x00 = 0x00)
         assert_eq!(cpu.register_a, 0x00);
@@ -3124,7 +3133,7 @@ mod test {
         cpu.load(vec![0x09, 0x0F]); // ORA #$0F (A | 0x0F)
         cpu.reset();
         cpu.register_a = 0xF0; // Set accumulator to 0xF0
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result should be 0xFF (0xF0 | 0x0F = 0xFF)
         assert_eq!(cpu.register_a, 0xFF);
@@ -3146,7 +3155,7 @@ mod test {
 
         cpu.register_a = 0x10; // Set accumulator to 0x10
 
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result should be 0x1F (0x10 | 0x0F = 0x1F)
         assert_eq!(cpu.register_a, 0x1F);
@@ -3166,7 +3175,7 @@ mod test {
         cpu.load(vec![0x09, 0x80]); // ORA #$80 (A | 0x80)
         cpu.reset();
         cpu.register_a = 0x00; // Set accumulator to 0x00
-        cpu.interpret();
+        cpu.execute_program();
 
         // The result should be 0x80 (0x00 | 0x80 = 0x80)
         assert_eq!(cpu.register_a, 0x80);
@@ -3187,7 +3196,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0x42; // Set accumulator to 0x42
         let initial_sp = cpu.stack_ptr; // Store the initial stack pointer
-        cpu.interpret();
+        cpu.execute_program();
 
         // The accumulator value should be pushed onto the stack
         let stack_address = 0x0100 + initial_sp as u16;
@@ -3210,7 +3219,7 @@ mod test {
         cpu.set_flag(StatusFlag::Negative);
 
         let initial_sp = cpu.stack_ptr; // Store the initial stack pointer
-        cpu.interpret();
+        cpu.execute_program();
 
         // The status register should be pushed onto the stack
         let pushed_status = cpu.mem_read(0x0100 + initial_sp as u16);
@@ -3235,7 +3244,7 @@ mod test {
         let value_to_pull = 0x42; // Manually push a value onto the stack (simulating a previous PHA or other operation)
         cpu.stack_ptr = 0xFD; // Set the stack pointer to a position where the value is stored
         cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, value_to_pull);
-        cpu.interpret();
+        cpu.execute_program();
 
         // The accumulator should now contain the value that was on the stack
         assert_eq!(cpu.register_a, value_to_pull);
@@ -3254,7 +3263,7 @@ mod test {
         // Push 0x00 onto the stack to simulate a value previously placed there
         cpu.stack_ptr = 0xFD;
         cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, 0x00); // Push 0x00 onto the stack
-        cpu.interpret();
+        cpu.execute_program();
 
         // Accumulator should be 0, and the Zero flag should be set
         assert_eq!(cpu.register_a, 0x00);
@@ -3271,7 +3280,7 @@ mod test {
         // Push a negative value (e.g., 0x80) onto the stack to simulate a value previously placed there
         cpu.stack_ptr = 0xFD;
         cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, 0x80); // Push 0x80 (signed -128) onto the stack
-        cpu.interpret();
+        cpu.execute_program();
 
         // Accumulator should now be 0x80, and the Negative flag should be set
         assert_eq!(cpu.register_a, 0x80);
@@ -3291,7 +3300,7 @@ mod test {
         let status_to_pull = 0b1100_0110; // Example value with some flags set
         cpu.stack_ptr = 0xFD; // Set the stack pointer to a position where we simulate the value is stored
         cpu.mem_write(0x0100 + cpu.stack_ptr as u16 + 1, status_to_pull);
-        cpu.interpret();
+        cpu.execute_program();
 
         // The processor status register should now contain the value pulled from the stack
         assert_eq!(cpu.status, status_to_pull);
@@ -3305,7 +3314,7 @@ mod test {
         cpu.load(vec![0x2A]); // ROL Accumulator
         cpu.reset();
         cpu.register_a = 0b01010101; // Initial value in accumulator (0x55)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROL, the value should shift left, and LSB should be 0
         assert_eq!(cpu.register_a, 0b10101010); // Result should be 0xAA
@@ -3326,7 +3335,7 @@ mod test {
         cpu.load(vec![0x2A]); // ROL Accumulator
         cpu.reset();
         cpu.register_a = 0b11010101; // Initial value in accumulator (0xD5)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROL, the value should shift left, and MSB will go to the Carry flag
         assert_eq!(cpu.register_a, 0b10101010); // Result should be 0xAA
@@ -3348,7 +3357,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0b01010101; // Initial value in accumulator (0x55)
         cpu.set_flag(StatusFlag::Carry); // Set Carry flag
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROL, the value should shift left, and Carry flag value should be placed into the LSB
         assert_eq!(cpu.register_a, 0b10101011); // Result should be 0xAB
@@ -3369,7 +3378,7 @@ mod test {
         cpu.load(vec![0x26, 0x10]); // ROL Zero Page address 0x10
         cpu.reset();
         cpu.mem_write(0x10, 0b01010101); // Initial value in memory (0x55)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROL, the value should shift left, and LSB should be 0
         assert_eq!(cpu.mem_read(0x10), 0b10101010); // Result should be
@@ -3390,7 +3399,7 @@ mod test {
         cpu.load(vec![0x26, 0x10]); // ROL Zero Page address 0x10
         cpu.reset();
         cpu.mem_write(0x10, 0b11010101); // Initial value in memory (0xD5)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROL, the value should shift left, and MSB will go to the Carry flag
         assert_eq!(cpu.mem_read(0x10), 0b10101010); // Result should be 0xAA
@@ -3411,7 +3420,7 @@ mod test {
         cpu.load(vec![0x2A]); // ROL Accumulator
         cpu.reset();
         cpu.register_a = 0b00000000; // Initial value in accumulator (0x00)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROL, the value is still zero
         assert_eq!(cpu.register_a, 0b00000000); // Result should be 0x00
@@ -3432,7 +3441,7 @@ mod test {
         cpu.load(vec![0x6A]); // ROR Accumulator
         cpu.reset();
         cpu.register_a = 0b10101010; // Initial value in accumulator (0xAA)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROR, the value should shift right, and MSB should be 0
         assert_eq!(cpu.register_a, 0b01010101); // Result should be 0x55
@@ -3454,7 +3463,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0b10101010; // Initial value in accumulator (0xAA)
         cpu.set_flag(StatusFlag::Carry); // Set Carry flag
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROR, the value should shift right, and Carry flag value should be placed into the MSB
         assert_eq!(cpu.register_a, 0b11010101); // Result should be 0xD5
@@ -3476,7 +3485,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0b10101010; // Initial value in accumulator (0xAA)
         cpu.set_flag(StatusFlag::Carry); // Set Carry flag
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROR, the value should shift right, and Carry flag should move into MSB
         assert_eq!(cpu.register_a, 0b11010101); // Result should be 0xD5
@@ -3497,7 +3506,7 @@ mod test {
         cpu.load(vec![0x66, 0x10]); // ROR Zero Page address 0x10
         cpu.reset();
         cpu.mem_write(0x10, 0b10101010); // Initial value in memory (0xAA)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROR, the value should shift right, and MSB should be 0
         assert_eq!(cpu.mem_read(0x10), 0b01010101); // Result should be 0x55
@@ -3519,7 +3528,7 @@ mod test {
         cpu.reset();
         cpu.mem_write(0x10, 0b10101010); // Initial value in memory (0xAA)
         cpu.set_flag(StatusFlag::Carry); // Set Carry flag
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROR, the value should shift right, and MSB will take the carry flag
         assert_eq!(cpu.mem_read(0x10), 0b11010101); // Result should be 0xD5
@@ -3540,7 +3549,7 @@ mod test {
         cpu.load(vec![0x6A]); // ROR Accumulator
         cpu.reset();
         cpu.register_a = 0b00000000; // Initial value in accumulator (0x00)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After ROR, the value is still zero
         assert_eq!(cpu.register_a, 0b00000000); // Result should be 0x00
@@ -3577,7 +3586,7 @@ mod test {
         cpu.clear_flag(StatusFlag::Carry);
         cpu.clear_flag(StatusFlag::Zero);
         cpu.clear_flag(StatusFlag::Negative);
-        cpu.interpret();
+        cpu.execute_program();
 
         // Check that the program counter is set to the return address + 1 (BRK)
         assert_eq!(cpu.program_counter, 0x1235);
@@ -3600,7 +3609,7 @@ mod test {
         // Push the status onto the stack
         cpu.mem_write(0x01F2, 0x34); // High byte of return address (0x0034)
         cpu.mem_write(0x01F3, 0x12); // Low byte of return address (0x1234)
-        cpu.interpret();
+        cpu.execute_program();
 
         // Check that the program counter is set to the return address + 1 (from spec) + 1 (BRK)
         assert_eq!(cpu.program_counter, 0x1236);
@@ -3615,7 +3624,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0x20; // Set accumulator to 0x20
         cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After SBC: A = A - 0x10 - (1 - Carry) = 0x20 - 0x10 - 0 = 0x10
         assert_eq!(cpu.register_a, 0x10);
@@ -3639,7 +3648,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0x10; // Set accumulator to 0x10
         cpu.clear_flag(StatusFlag::Carry); // Borrow is needed (carry cleared)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After SBC: A = A - 0x10 - (1 - Carry) = 0x10 - 0x10 - 1 = 0xFF
         assert_eq!(cpu.register_a, 0xFF);
@@ -3663,7 +3672,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0x10; // Set accumulator to 0x10
         cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After SBC: A = A - 0x10 - (1 - Carry) = 0x10 - 0x10 - 0 = 0x00
         assert_eq!(cpu.register_a, 0x00);
@@ -3687,7 +3696,7 @@ mod test {
         cpu.reset();
         cpu.register_a = 0x7F; // Set accumulator to 0x7F
         cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
-        cpu.interpret();
+        cpu.execute_program();
 
         // After SBC: A = A - 0x80 - (1 - Carry) = 0x7F - 0x80 = 0xFF
         assert_eq!(cpu.register_a, 0xFF);
@@ -3713,7 +3722,7 @@ mod test {
         cpu.register_a = 0x10; // Set accumulator to 0x10
         cpu.set_flag(StatusFlag::Carry); // No borrow needed (carry set)
 
-        cpu.interpret();
+        cpu.execute_program();
 
         // After SBC: A = A - M - (1 - Carry) = 0x10 - 0x05 = 0x0B
         assert_eq!(cpu.register_a, 0x0B);
@@ -3739,7 +3748,7 @@ mod test {
         cpu.register_a = 0x10; // Set accumulator to 0x10
         cpu.clear_flag(StatusFlag::Carry); // Borrow is needed (carry cleared)
 
-        cpu.interpret();
+        cpu.execute_program();
 
         // After SBC: A = A - M - (1 - Carry) = 0x10 - 0x10 - 1 = 0xFF
         assert_eq!(cpu.register_a, 0xFF);
@@ -3761,7 +3770,7 @@ mod test {
         // Load SEC instruction (0x38)
         cpu.load(vec![0x38]); // SEC
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // The carry flag should be set after executing SEC
         assert!(cpu.is_flag_set(StatusFlag::Carry));
@@ -3774,7 +3783,7 @@ mod test {
         // Load SED instruction (0xF8)
         cpu.load(vec![0xF8]); // SED
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // The decimal flag should be set after executing SED
         assert!(cpu.is_flag_set(StatusFlag::Decimal));
@@ -3787,7 +3796,7 @@ mod test {
         // Load SEI instruction (0x78)
         cpu.load(vec![0x78]); // SEI
         cpu.reset();
-        cpu.interpret();
+        cpu.execute_program();
 
         // The interrupt disable flag should be set after executing SEI
         assert!(cpu.is_flag_set(StatusFlag::Interrupt));
@@ -3801,7 +3810,7 @@ mod test {
         cpu.load(vec![0x85, 0x10]); // STA $10 (store A register at memory address 0x10)
         cpu.reset();
         cpu.register_a = 0x42; // Set A register to 0x42
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x10 should now contain the value from the A register (0x42)
         assert_eq!(cpu.mem_read(0x10), 0x42);
@@ -3815,7 +3824,7 @@ mod test {
         cpu.load(vec![0x8D, 0x00, 0x20]); // STA $2000 (store A register at memory address 0x2000)
         cpu.reset();
         cpu.register_a = 0x99; // Set A register to 0x99
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x2000 should now contain the value from the A register (0x99)
         assert_eq!(cpu.mem_read(0x2000), 0x99);
@@ -3829,7 +3838,7 @@ mod test {
         cpu.load(vec![0x86, 0x10]); // STX $10 (store X register at memory address 0x10)
         cpu.reset();
         cpu.register_x = 0x42; // Set X register to 0x42
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x10 should now contain the value from the X register (0x42)
         assert_eq!(cpu.mem_read(0x10), 0x42);
@@ -3844,7 +3853,7 @@ mod test {
         cpu.reset();
         cpu.register_x = 0x55; // Set X register to 0x55
         cpu.register_y = 0x03; // Set Y register to 0x03
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x13 (0x10 + 0x03) should now contain the value from the X register (0x55)
         assert_eq!(cpu.mem_read(0x13), 0x55);
@@ -3858,7 +3867,7 @@ mod test {
         cpu.load(vec![0x8E, 0x00, 0x20]); // STX $2000 (store X register at memory address 0x2000)
         cpu.reset();
         cpu.register_x = 0x99; // Set X register to 0x99
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x2000 should now contain the value from the X register (0x99)
         assert_eq!(cpu.mem_read(0x2000), 0x99);
@@ -3872,7 +3881,7 @@ mod test {
         cpu.load(vec![0x84, 0x10]); // STY $10 (store Y register at memory address 0x10)
         cpu.reset();
         cpu.register_y = 0x42; // Set Y register to 0x42
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x10 should now contain the value from the Y register (0x42)
         assert_eq!(cpu.mem_read(0x10), 0x42);
@@ -3887,7 +3896,7 @@ mod test {
         cpu.reset();
         cpu.register_y = 0x55; // Set Y register to 0x55
         cpu.register_x = 0x03; // Set X register to 0x03
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x13 (0x10 + 0x03) should now contain the value from the Y register (0x55)
         assert_eq!(cpu.mem_read(0x13), 0x55);
@@ -3901,7 +3910,7 @@ mod test {
         cpu.load(vec![0x8C, 0x00, 0x20]); // STY $2000 (store Y register at memory address 0x2000)
         cpu.reset();
         cpu.register_y = 0x99; // Set Y register to 0x99
-        cpu.interpret();
+        cpu.execute_program();
 
         // The memory address 0x2000 should now contain the value from the Y register (0x99)
         assert_eq!(cpu.mem_read(0x2000), 0x99);
@@ -3915,7 +3924,7 @@ mod test {
         cpu.load(vec![0xA8]); // TAY
         cpu.reset();
         cpu.register_a = 0x42; // Set accumulator to 0x42
-        cpu.interpret();
+        cpu.execute_program();
 
         // After TAY, the Y register should now be equal to the accumulator
         assert_eq!(cpu.register_y, 0x42);
@@ -3929,7 +3938,7 @@ mod test {
         cpu.load(vec![0xBA]); // TSX
         cpu.reset();
         cpu.stack_ptr = 0x30; // Set stack pointer to 0x30
-        cpu.interpret();
+        cpu.execute_program();
 
         // After TSX, the X register should now be equal to the stack pointer
         assert_eq!(cpu.register_x, 0x30);
@@ -3943,7 +3952,7 @@ mod test {
         cpu.load(vec![0x8A]); // TXA
         cpu.reset();
         cpu.register_x = 0x55; // Set X register to 0x55
-        cpu.interpret();
+        cpu.execute_program();
 
         // After TXA, the accumulator should now be equal to the X register
         assert_eq!(cpu.register_a, 0x55);
@@ -3957,7 +3966,7 @@ mod test {
         cpu.load(vec![0x9A]); // TXS
         cpu.reset();
         cpu.register_x = 0x40; // Set X register to 0x40
-        cpu.interpret();
+        cpu.execute_program();
 
         // After TXS, the stack pointer should now be equal to the X register
         assert_eq!(cpu.stack_ptr, 0x40);
@@ -3971,7 +3980,7 @@ mod test {
         cpu.load(vec![0x98]); // TYA
         cpu.reset();
         cpu.register_y = 0x99; // Set Y register to 0x99
-        cpu.interpret();
+        cpu.execute_program();
 
         // After TYA, the accumulator should now be equal to the Y register
         assert_eq!(cpu.register_a, 0x99);
