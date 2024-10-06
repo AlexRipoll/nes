@@ -26,7 +26,7 @@ impl StatusFlag {
 }
 
 #[derive(Debug)]
-struct CPU {
+pub struct CPU {
     register_a: u8,
     register_x: u8,
     register_y: u8,
@@ -37,7 +37,7 @@ struct CPU {
 }
 
 impl CPU {
-    fn new() -> Self {
+    pub fn new() -> Self {
         CPU {
             register_a: 0,
             register_x: 0,
@@ -69,11 +69,11 @@ impl CPU {
         }
     }
 
-    fn mem_read(&self, address: u16) -> u8 {
+    pub fn mem_read(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
 
-    fn mem_write(&mut self, address: u16, data: u8) {
+    pub fn mem_write(&mut self, address: u16, data: u8) {
         self.memory[address as usize] = data;
     }
 
@@ -127,9 +127,12 @@ impl CPU {
         msb << 8 | lsb
     }
 
+    // TODO: update
     fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program);
-        self.mem_write_u16(0xFFFC, 0x8000);
+        // self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program);
+        // self.mem_write_u16(0xFFFC, 0x8000);
+        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program);
+        self.mem_write_u16(0xFFFC, 0x0600);
     }
 
     fn reset(&mut self) {
@@ -140,10 +143,19 @@ impl CPU {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
-    fn run(&mut self, program: Vec<u8>) {
+    pub fn run(&mut self, program: Vec<u8>) {
         self.load(program);
         self.reset();
         self.execute_program();
+    }
+
+    pub fn run_with_callback<F>(&mut self, program: Vec<u8>, callback: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.load(program);
+        self.reset();
+        self.execute_program_with_callback(callback);
     }
 
     pub fn execute_program(&mut self) {
@@ -403,9 +415,6 @@ impl CPU {
                 let address = (msb as u16) << 8 | (lsb as u16);
                 let address = address.wrapping_add(self.register_y as u16);
                 Some(address)
-            }
-            AddressingMode::NoneAddressing => {
-                panic!("mode {:?} is not supported", mode);
             }
         }
     }
