@@ -1,6 +1,6 @@
 use core::panic;
 
-use crate::instruction::{AddressingMode, Instruction};
+use crate::instruction::{self, AddressingMode, Instruction};
 
 /// Status Flags
 ///   7   6   5   4   3   2   1   0
@@ -133,6 +133,10 @@ impl CPU {
         let msb = self.stack_pop() as u16;
 
         msb << 8 | lsb
+    }
+
+    fn update_program_counter(&mut self, instruction: &Instruction) {
+        self.program_counter += instruction.size as u16 - 1;
     }
 
     // TODO: update
@@ -468,7 +472,7 @@ impl CPU {
 
         self.register_a = res as u8;
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn and(&mut self, opcode: u8) {
@@ -480,7 +484,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn asl(&mut self, opcode: u8) {
@@ -503,13 +507,13 @@ impl CPU {
             }
         }
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn branch(&mut self, opcode: u8, condition: bool) {
         let instruction = Instruction::from(opcode);
         let offset = self.operand_address(&instruction.mode).unwrap() as i8;
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
 
         if condition {
             // jump to address
@@ -539,7 +543,7 @@ impl CPU {
         self.copy_bit_from(operand, StatusFlag::Overflow);
         self.copy_bit_from(operand, StatusFlag::Negative);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn bmi(&mut self, opcode: u8) {
@@ -586,28 +590,28 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Carry);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn cld(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Decimal);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn cli(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Interrupt);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn clv(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Overflow);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn compare(&mut self, opcode: u8, register: u8) {
@@ -620,7 +624,7 @@ impl CPU {
 
         self.copy_bit_from(register.wrapping_sub(operand), StatusFlag::Negative);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn cmp(&mut self, opcode: u8) {
@@ -645,7 +649,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(res);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn dex(&mut self, opcode: u8) {
@@ -654,7 +658,7 @@ impl CPU {
         self.register_x = self.register_x.wrapping_sub(1);
         self.set_zero_and_negative_flags(self.register_x);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn dey(&mut self, opcode: u8) {
@@ -663,7 +667,7 @@ impl CPU {
         self.register_y = self.register_y.wrapping_sub(1);
         self.set_zero_and_negative_flags(self.register_y);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn eor(&mut self, opcode: u8) {
@@ -675,7 +679,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn inc(&mut self, opcode: u8) {
@@ -688,7 +692,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(res);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn inx(&mut self, opcode: u8) {
@@ -696,7 +700,7 @@ impl CPU {
         self.register_x = self.register_x.wrapping_add(1);
         self.set_zero_and_negative_flags(self.register_x);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn iny(&mut self, opcode: u8) {
@@ -704,7 +708,7 @@ impl CPU {
         self.register_y = self.register_y.wrapping_add(1);
         self.set_zero_and_negative_flags(self.register_y);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn jmp(&mut self, opcode: u8) {
@@ -731,7 +735,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn ldx(&mut self, opcode: u8) {
@@ -742,7 +746,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(self.register_x);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn ldy(&mut self, opcode: u8) {
@@ -753,7 +757,7 @@ impl CPU {
 
         self.set_zero_and_negative_flags(self.register_y);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn lsr(&mut self, opcode: u8) {
@@ -777,13 +781,13 @@ impl CPU {
             }
         }
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn nop(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn ora(&mut self, opcode: u8) {
@@ -795,40 +799,36 @@ impl CPU {
 
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn pha(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         self.stack_push(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn php(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         self.stack_push(self.status);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn pla(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         self.register_a = self.stack_pop();
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn plp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         self.status = self.stack_pop();
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn rol(&mut self, opcode: u8) {
@@ -836,7 +836,6 @@ impl CPU {
         match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_accumulator = self.register_a;
-
                 self.register_a = (self.register_a << 1) | (self.status & 0b0000_0001);
                 self.copy_bit_from(old_accumulator >> 7, StatusFlag::Carry);
 
@@ -854,7 +853,7 @@ impl CPU {
             }
         }
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn ror(&mut self, opcode: u8) {
@@ -862,7 +861,6 @@ impl CPU {
         match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_accumulator = self.register_a;
-
                 self.register_a = (self.register_a >> 1) | ((self.status & 0b0000_0001) << 7);
                 self.copy_bit_from(old_accumulator, StatusFlag::Carry);
 
@@ -880,25 +878,23 @@ impl CPU {
             }
         }
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn rti(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         self.status = self.stack_pop();
         self.program_counter = self.stack_pop_u16();
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn rts(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-
         // According to the 6502 specification, after pulling the address from the stack, the program counter should be incremented by 1.
         self.program_counter = self.stack_pop_u16() + 1;
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn sbc(&mut self, opcode: u8) {
@@ -933,28 +929,28 @@ impl CPU {
         // Set Negative flag (if the MSB of the result is set)
         self.set_flag_conditionally(StatusFlag::Negative, self.register_a & 0x80 != 0);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn sec(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Carry);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn sed(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Decimal);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn sei(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Interrupt);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn sta(&mut self, opcode: u8) {
@@ -962,7 +958,7 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
         self.mem_write(address, self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn stx(&mut self, opcode: u8) {
@@ -970,7 +966,7 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
         self.mem_write(address, self.register_x);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn sty(&mut self, opcode: u8) {
@@ -978,7 +974,7 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
         self.mem_write(address, self.register_y);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn tax(&mut self, opcode: u8) {
@@ -986,7 +982,7 @@ impl CPU {
         self.register_x = self.register_a;
         self.set_zero_and_negative_flags(self.register_x);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn tay(&mut self, opcode: u8) {
@@ -994,7 +990,7 @@ impl CPU {
         self.register_y = self.register_a;
         self.set_zero_and_negative_flags(self.register_y);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn tsx(&mut self, opcode: u8) {
@@ -1002,7 +998,7 @@ impl CPU {
         self.register_x = self.stack_ptr;
         self.set_zero_and_negative_flags(self.register_x);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn txa(&mut self, opcode: u8) {
@@ -1010,7 +1006,7 @@ impl CPU {
         self.register_a = self.register_x;
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn txs(&mut self, opcode: u8) {
@@ -1018,7 +1014,7 @@ impl CPU {
         self.stack_ptr = self.register_x;
         self.set_zero_and_negative_flags(self.stack_ptr);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 
     fn tya(&mut self, opcode: u8) {
@@ -1026,7 +1022,7 @@ impl CPU {
         self.register_a = self.register_y;
         self.set_zero_and_negative_flags(self.register_a);
 
-        self.program_counter += instruction.size as u16 - 1;
+        self.update_program_counter(&instruction);
     }
 }
 
