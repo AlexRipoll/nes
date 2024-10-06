@@ -69,6 +69,14 @@ impl CPU {
         }
     }
 
+    fn set_flag_conditionally(&mut self, flag: StatusFlag, condition: bool) {
+        if condition {
+            self.set_flag(flag);
+        } else {
+            self.clear_flag(flag);
+        }
+    }
+
     pub fn mem_read(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
@@ -444,32 +452,19 @@ impl CPU {
             + (self.status & StatusFlag::Carry.to_mask()) as u16;
 
         // set Carry flag
-        if res > 255 {
-            self.set_flag(StatusFlag::Carry);
-        } else {
-            self.clear_flag(StatusFlag::Carry);
-        }
+        self.set_flag_conditionally(StatusFlag::Carry, res > 0xFF);
 
         // set Zero flag
-        if res as u8 == 0 {
-            self.set_flag(StatusFlag::Zero);
-        } else {
-            self.clear_flag(StatusFlag::Zero);
-        }
+        self.set_flag_conditionally(StatusFlag::Zero, res as u8 == 0);
 
         // set Overflow flag
-        if (operand ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0 {
-            self.set_flag(StatusFlag::Overflow);
-        } else {
-            self.clear_flag(StatusFlag::Overflow);
-        }
+        self.set_flag_conditionally(
+            StatusFlag::Overflow,
+            (operand ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0,
+        );
 
         // set Negative flag
-        if res as u8 & 0x80 != 0 {
-            self.set_flag(StatusFlag::Negative);
-        } else {
-            self.clear_flag(StatusFlag::Negative);
-        }
+        self.set_flag_conditionally(StatusFlag::Negative, res as u8 & 0x80 != 0);
 
         self.register_a = res as u8;
 
@@ -492,11 +487,7 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         match instruction.mode {
             AddressingMode::Accumulator => {
-                if self.register_a & 0b1000_0000 != 0 {
-                    self.set_flag(StatusFlag::Carry);
-                } else {
-                    self.clear_flag(StatusFlag::Carry);
-                }
+                self.set_flag_conditionally(StatusFlag::Carry, self.register_a & 0b1000_0000 != 0);
                 self.register_a = self.register_a << 1;
                 self.set_zero_and_negative_flags(self.register_a);
             }
@@ -504,11 +495,7 @@ impl CPU {
                 let address = self.operand_address(&instruction.mode).unwrap();
                 let operand = self.mem_read(address);
 
-                if operand & 0b1000_0000 != 0 {
-                    self.set_flag(StatusFlag::Carry);
-                } else {
-                    self.clear_flag(StatusFlag::Carry);
-                }
+                self.set_flag_conditionally(StatusFlag::Carry, operand & 0b1000_0000 != 0);
 
                 let res = operand << 1;
                 self.mem_write(address, res);
@@ -547,11 +534,7 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
         let operand = self.mem_read(address);
 
-        if self.register_a & operand == 0 {
-            self.set_flag(StatusFlag::Zero);
-        } else {
-            self.clear_flag(StatusFlag::Zero);
-        }
+        self.set_flag_conditionally(StatusFlag::Zero, self.register_a & operand == 0);
 
         self.copy_bit_from(operand, StatusFlag::Overflow);
         self.copy_bit_from(operand, StatusFlag::Negative);
@@ -632,16 +615,8 @@ impl CPU {
         let address = self.operand_address(&instruction.mode).unwrap();
         let operand = self.mem_read(address);
 
-        if register >= operand {
-            self.set_flag(StatusFlag::Carry);
-        } else {
-            self.clear_flag(StatusFlag::Carry);
-        }
-        if register == operand {
-            self.set_flag(StatusFlag::Zero);
-        } else {
-            self.clear_flag(StatusFlag::Zero);
-        }
+        self.set_flag_conditionally(StatusFlag::Carry, register >= operand);
+        self.set_flag_conditionally(StatusFlag::Zero, register == operand);
 
         self.copy_bit_from(register.wrapping_sub(operand), StatusFlag::Negative);
 
@@ -785,11 +760,7 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         match instruction.mode {
             AddressingMode::Accumulator => {
-                if self.register_a & 0b0000_0001 != 0 {
-                    self.set_flag(StatusFlag::Carry);
-                } else {
-                    self.clear_flag(StatusFlag::Carry);
-                }
+                self.set_flag_conditionally(StatusFlag::Carry, self.register_a & 0b0000_0001 != 0);
 
                 self.register_a = self.register_a >> 1;
                 self.set_zero_and_negative_flags(self.register_a);
@@ -798,11 +769,7 @@ impl CPU {
                 let address = self.operand_address(&instruction.mode).unwrap();
                 let operand = self.mem_read(address);
 
-                if self.register_a & 0b0000_0001 != 0 {
-                    self.set_flag(StatusFlag::Carry);
-                } else {
-                    self.clear_flag(StatusFlag::Carry);
-                }
+                self.set_flag_conditionally(StatusFlag::Carry, self.register_a & 0b0000_0001 != 0);
 
                 let res = operand >> 1;
                 self.mem_write(address, res);
@@ -950,34 +917,21 @@ impl CPU {
         self.register_a = result as u8;
 
         // Set Carry flag (borrow didn't happen if the result is <= 255)
-        if result > 0xFF {
-            self.set_flag(StatusFlag::Carry);
-        } else {
-            self.clear_flag(StatusFlag::Carry);
-        }
+        self.set_flag_conditionally(StatusFlag::Carry, result > 0xFF);
 
         // Set Zero flag (if the result is zero)
-        if self.register_a == 0 {
-            self.set_flag(StatusFlag::Zero);
-        } else {
-            self.clear_flag(StatusFlag::Zero);
-        }
+        self.set_flag_conditionally(StatusFlag::Zero, self.register_a == 0);
 
         // Set Overflow flag
         // Overflow happens if the sign of the result is wrong:
         // If A and M have opposite signs, but the result has the same sign as M
-        if ((accumulator_before ^ self.register_a) & (accumulator_before ^ operand) & 0x80) != 0 {
-            self.set_flag(StatusFlag::Overflow);
-        } else {
-            self.clear_flag(StatusFlag::Overflow);
-        }
+        self.set_flag_conditionally(
+            StatusFlag::Overflow,
+            ((accumulator_before ^ self.register_a) & (accumulator_before ^ operand) & 0x80) != 0,
+        );
 
         // Set Negative flag (if the MSB of the result is set)
-        if self.register_a & 0x80 != 0 {
-            self.set_flag(StatusFlag::Negative);
-        } else {
-            self.clear_flag(StatusFlag::Negative);
-        }
+        self.set_flag_conditionally(StatusFlag::Negative, self.register_a & 0x80 != 0);
 
         self.program_counter += instruction.size as u16 - 1;
     }
