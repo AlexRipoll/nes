@@ -773,7 +773,7 @@ impl CPU {
                 let address = self.operand_address(&instruction.mode).unwrap();
                 let operand = self.mem_read(address);
 
-                self.set_flag_conditionally(StatusFlag::Carry, self.register_a & 0b0000_0001 != 0);
+                self.set_flag_conditionally(StatusFlag::Carry, operand & 0b0000_0001 != 0);
 
                 let res = operand >> 1;
                 self.mem_write(address, res);
