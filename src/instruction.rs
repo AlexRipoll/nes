@@ -1,14 +1,57 @@
 use core::panic;
 
+/// Represents a CPU instruction for the 6502 processor.
+///
+/// This struct holds information about a single instruction, including its
+/// opcode, mnemonic, addressing mode, size, and the number of cycles it
+/// takes to execute. It is used by the CPU emulator to understand and
+/// execute 6502 assembly language instructions.
 #[derive(Debug)]
 pub struct Instruction {
+    /// The opcode byte that identifies the instruction.
+    ///
+    /// This is a unique byte (0x00 to 0xFF) that corresponds to a specific
+    /// operation the CPU will perform. The opcode is used to look up the
+    /// associated mnemonic and addressing mode.
     opcode: u8,
+
+    /// The human-readable name of the instruction.
+    ///
+    /// This field represents the mnemonic of the instruction (e.g., `LDA`, `STA`,
+    /// `ADC`, etc.) and provides a way to identify the instruction in a more
+    /// meaningful way than just the opcode.
     mnemonic: Mnemonic,
+
+    /// The mode used to access operands for the instruction.
+    ///
+    /// This field specifies how the instruction accesses its data, which can
+    /// affect how operands are read from memory or registers. The addressing
+    /// mode can be immediate, zero page, absolute, indirect, etc.
     pub mode: AddressingMode,
+
+    /// The size of the instruction in bytes.
+    ///
+    /// This field indicates how many bytes the instruction occupies in memory.
+    /// It can be one byte for simple instructions (e.g., `NOP`), or more for
+    /// instructions that access data (e.g., `LDA #$01`).
     pub size: u8,
+
+    /// The number of clock cycles required to execute the instruction.
+    ///
+    /// This field represents how many cycles the instruction takes to complete.
+    /// Different instructions can have varying cycle counts based on their complexity
+    /// and the addressing modes used.
     cycles: u8,
 }
 
+/// Represents the different CPU instructions (mnemonics) available on the 6502 processor.
+///
+/// The 6502 processor supports a wide range of instructions, each identified
+/// by a mnemonic. This enum lists all the valid mnemonics that the CPU
+/// can execute. Each variant corresponds to a specific operation.
+///
+/// Mnemonics include operations like arithmetic, bit manipulation, branching,
+/// and control instructions.
 #[derive(Debug)]
 enum Mnemonic {
     ADC,
@@ -69,21 +112,98 @@ enum Mnemonic {
     TYA,
 }
 
+/// Represents the different addressing modes used by the 6502 processor.
+///
+/// Addressing modes define how the operands of an instruction are accessed.
+/// Depending on the mode, operands may be immediate values, memory addresses,
+/// or registers. The addressing mode affects how the CPU fetches and interprets
+/// data for a given instruction.
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
+    /// Implied addressing mode.
+    ///
+    /// In this mode, the instruction does not require an explicit operand.
+    /// The operation is performed on a known location, such as the accumulator,
+    /// or affects the processor status.
     Implied,
+
+    /// Accumulator addressing mode.
+    ///
+    /// In this mode, the operand is implicitly the accumulator register (`A`).
+    /// Many instructions like shifts and rotations operate directly on `A`.
     Accumulator,
+
+    /// Immediate addressing mode.
+    ///
+    /// The operand is provided as part of the instruction itself, typically
+    /// as the next byte. This mode is often used for loading values into
+    /// registers or performing operations on constants.
     Immediate,
+
+    /// Zero Page addressing mode.
+    ///
+    /// The operand is located in the first 256 bytes of memory (zero page).
+    /// This mode is more efficient as it requires fewer bytes to represent
+    /// the address.
     ZeroPage,
+
+    /// Zero Page X-indexed addressing mode.
+    ///
+    /// Similar to Zero Page addressing, but the effective address is calculated
+    /// by adding the X register to the base zero page address.
     ZeroPage_X,
+
+    /// Zero Page Y-indexed addressing mode.
+    ///
+    /// Similar to Zero Page addressing, but the effective address is calculated
+    /// by adding the Y register to the base zero page address.
     ZeroPage_Y,
+
+    /// Relative addressing mode.
+    ///
+    /// Typically used for branch instructions, the operand is a signed 8-bit
+    /// offset from the program counter. This allows for short jumps forward
+    /// or backward in the code.
     Relative,
+
+    /// Absolute addressing mode.
+    ///
+    /// The operand is a full 16-bit address. The instruction operates on the
+    /// memory location specified by this address.
     Absolute,
+
+    /// Absolute X-indexed addressing mode.
+    ///
+    /// Similar to Absolute addressing, but the effective address is calculated
+    /// by adding the X register to the 16-bit base address.
     Absolute_X,
+
+    /// Absolute Y-indexed addressing mode.
+    ///
+    /// Similar to Absolute addressing, but the effective address is calculated
+    /// by adding the Y register to the 16-bit base address.
     Absolute_Y,
+
+    /// Indirect addressing mode.
+    ///
+    /// In this mode, the operand is a pointer to a memory location.
+    /// The address stored at the operand's location is used as the effective
+    /// address.
     Indirect,
+
+    /// Indexed indirect addressing mode (X, Indirect).
+    ///
+    /// The operand is an 8-bit zero page address. This address is added to the
+    /// X register to form the effective address, and the value at this address
+    /// is used as the final memory address for the operation.
     Indirect_X,
+
+    /// Indirect indexed addressing mode (Indirect, Y).
+    ///
+    /// In this mode, the operand is an 8-bit zero page address. The memory
+    /// address stored at this location is added to the Y register to form
+    /// the effective address.
     Indirect_Y,
 }
 
