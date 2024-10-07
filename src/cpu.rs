@@ -1,6 +1,6 @@
 use core::panic;
 
-use crate::instruction::{self, AddressingMode, Instruction};
+use crate::instruction::{AddressingMode, Instruction};
 
 /// Status Flags
 ///   7   6   5   4   3   2   1   0
@@ -366,33 +366,33 @@ impl CPU {
     }
 
     /// Read bout Addressing Modes implementations: https://www.nesdev.org/obelisk-6502-guide/addressing.html
-    fn operand_address(&self, mode: &AddressingMode) -> Option<u16> {
+    fn operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
-            AddressingMode::Implied => None,
-            AddressingMode::Accumulator => None,
-            AddressingMode::Immediate => Some(self.program_counter),
-            AddressingMode::ZeroPage => Some(self.mem_read(self.program_counter) as u16),
+            //  specail cases, must be handled separately
+            AddressingMode::Implied | AddressingMode::Accumulator => unreachable!(),
+            AddressingMode::Immediate => self.program_counter,
+            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
             AddressingMode::ZeroPage_X => {
                 let operand = self.mem_read(self.program_counter);
                 let address = operand.wrapping_add(self.register_x) as u16;
-                Some(address)
+                address
             }
             AddressingMode::ZeroPage_Y => {
                 let operand = self.mem_read(self.program_counter);
                 let address = operand.wrapping_add(self.register_y) as u16;
-                Some(address)
+                address
             }
-            AddressingMode::Relative => Some(self.mem_read(self.program_counter) as u16),
-            AddressingMode::Absolute => Some(self.mem_read_u16(self.program_counter)),
+            AddressingMode::Relative => self.mem_read(self.program_counter) as u16,
+            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
             AddressingMode::Absolute_X => {
                 let operand = self.mem_read_u16(self.program_counter);
                 let address = operand.wrapping_add(self.register_x as u16);
-                Some(address)
+                address
             }
             AddressingMode::Absolute_Y => {
                 let operand = self.mem_read_u16(self.program_counter);
                 let address = operand.wrapping_add(self.register_y as u16);
-                Some(address)
+                address
             }
             // The original 6502 CPU has a bug when fetching the target address in indirect jumps if the pointer falls on a page
             // boundary (e.g., addresses ending with $FF, such as $xxFF, where xx can be any value from $00 to $FF). In these cases,
@@ -409,7 +409,7 @@ impl CPU {
                     self.mem_read_u16(operand)
                 };
 
-                Some(address)
+                address
             }
             AddressingMode::Indirect_X => {
                 let operand = self.mem_read(self.program_counter);
@@ -417,7 +417,7 @@ impl CPU {
                 let ptr: u8 = (operand as u8).wrapping_add(self.register_x);
                 let lsb = self.mem_read(ptr as u16);
                 let msb = self.mem_read(ptr.wrapping_add(1) as u16);
-                Some((msb as u16) << 8 | (lsb as u16))
+                (msb as u16) << 8 | (lsb as u16)
             }
             AddressingMode::Indirect_Y => {
                 let operand = self.mem_read(self.program_counter);
@@ -426,7 +426,7 @@ impl CPU {
                 let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
                 let address = (msb as u16) << 8 | (lsb as u16);
                 let address = address.wrapping_add(self.register_y as u16);
-                Some(address)
+                address
             }
         }
     }
@@ -449,7 +449,7 @@ impl CPU {
 impl CPU {
     fn adc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
         let res = self.register_a as u16
             + operand as u16
@@ -477,7 +477,7 @@ impl CPU {
 
     fn and(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.register_a &= operand;
@@ -496,7 +496,7 @@ impl CPU {
                 self.set_zero_and_negative_flags(self.register_a);
             }
             _ => {
-                let address = self.operand_address(&instruction.mode).unwrap();
+                let address = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 self.set_flag_conditionally(StatusFlag::Carry, operand & 0b1000_0000 != 0);
@@ -512,7 +512,7 @@ impl CPU {
 
     fn branch(&mut self, opcode: u8, condition: bool) {
         let instruction = Instruction::from(opcode);
-        let offset = self.operand_address(&instruction.mode).unwrap() as i8;
+        let offset = self.operand_address(&instruction.mode) as i8;
         self.update_program_counter(&instruction);
 
         if condition {
@@ -535,7 +535,7 @@ impl CPU {
 
     fn bit(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.set_flag_conditionally(StatusFlag::Zero, self.register_a & operand == 0);
@@ -616,7 +616,7 @@ impl CPU {
 
     fn compare(&mut self, opcode: u8, register: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.set_flag_conditionally(StatusFlag::Carry, register >= operand);
@@ -641,7 +641,7 @@ impl CPU {
 
     fn dec(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         let res = operand.wrapping_sub(1);
@@ -672,7 +672,7 @@ impl CPU {
 
     fn eor(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.register_a ^= operand;
@@ -684,7 +684,7 @@ impl CPU {
 
     fn inc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         let res = operand.wrapping_add(1);
@@ -713,14 +713,14 @@ impl CPU {
 
     fn jmp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
 
         self.program_counter = address;
     }
 
     fn jsr(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let subroutine_address = self.operand_address(&instruction.mode).unwrap();
+        let subroutine_address = self.operand_address(&instruction.mode);
 
         self.stack_push_u16(self.program_counter + 2 - 1);
 
@@ -729,7 +729,7 @@ impl CPU {
 
     fn lda(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_a = value;
 
@@ -740,7 +740,7 @@ impl CPU {
 
     fn ldx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_x = value;
 
@@ -751,7 +751,7 @@ impl CPU {
 
     fn ldy(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_y = value;
 
@@ -770,7 +770,7 @@ impl CPU {
                 self.set_zero_and_negative_flags(self.register_a);
             }
             _ => {
-                let address = self.operand_address(&instruction.mode).unwrap();
+                let address = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 self.set_flag_conditionally(StatusFlag::Carry, operand & 0b0000_0001 != 0);
@@ -792,7 +792,7 @@ impl CPU {
 
     fn ora(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.register_a |= operand;
@@ -842,7 +842,7 @@ impl CPU {
                 self.set_zero_and_negative_flags(self.register_a);
             }
             _ => {
-                let address = self.operand_address(&instruction.mode).unwrap();
+                let address = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 let rotated_operand = (operand << 1) | (self.status & 0b0000_0001);
@@ -867,7 +867,7 @@ impl CPU {
                 self.set_zero_and_negative_flags(self.register_a);
             }
             _ => {
-                let address = self.operand_address(&instruction.mode).unwrap();
+                let address = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 let rotated_operand = (operand >> 1) | ((self.status & 0b0000_0001) << 7);
@@ -899,7 +899,7 @@ impl CPU {
 
     fn sbc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         // Perform the two's complement subtraction:
@@ -955,7 +955,7 @@ impl CPU {
 
     fn sta(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_a);
 
         self.update_program_counter(&instruction);
@@ -963,7 +963,7 @@ impl CPU {
 
     fn stx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_x);
 
         self.update_program_counter(&instruction);
@@ -971,7 +971,7 @@ impl CPU {
 
     fn sty(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode).unwrap();
+        let address = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_y);
 
         self.update_program_counter(&instruction);
