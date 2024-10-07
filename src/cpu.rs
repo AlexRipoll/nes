@@ -1,6 +1,9 @@
 use core::panic;
 
-use crate::instruction::{AddressingMode, Instruction};
+use crate::{
+    bus::Bus,
+    instruction::{AddressingMode, Instruction},
+};
 
 /// Represents the status flags of the 6502 CPU, stored in a single byte.
 /// Each bit of the byte is mapped to a specific flag, represented in binary:
@@ -56,7 +59,7 @@ pub struct CPU {
     /// Stack Pointer (SP)
     stack_ptr: u8,
     /// Memory of the system (64KB)
-    memory: [u8; 0xFFFF + 1],
+    bus: Bus,
 }
 
 impl CPU {
@@ -69,7 +72,7 @@ impl CPU {
             status: 0,
             program_counter: 0,
             stack_ptr: 0xFD,
-            memory: [0u8; 0xFFFF + 1],
+            bus: Bus::new(),
         }
     }
 
@@ -113,26 +116,23 @@ impl CPU {
 
     /// Reads a byte from memory at the specified `address`.
     pub fn mem_read(&self, address: u16) -> u8 {
-        self.memory[address as usize]
+        self.bus.mem_read(address)
     }
 
     /// Writes a byte of `data` to memory at the specified `address`.
     pub fn mem_write(&mut self, address: u16, data: u8) {
-        self.memory[address as usize] = data;
+        self.bus.mem_write(address, data);
     }
 
     /// Reads two bytes from memory at the specified `address`, returning a 16-bit value.
     /// This is little-endian, meaning the least significant byte is read first.
     fn mem_read_u16(&self, address: u16) -> u16 {
-        let lsb = self.mem_read(address) as u16;
-        let msb = self.mem_read(address + 1) as u16;
-        (msb << 8) | (lsb as u16)
+        self.bus.mem_read_u16(address)
     }
 
     /// Writes a 16-bit value to memory at the specified `address`.
     fn mem_write_u16(&mut self, address: u16, data: u16) {
-        let le_bytes = data.to_le_bytes();
-        self.memory[address as usize..=address as usize + 1].copy_from_slice(&le_bytes);
+        self.bus.mem_write_u16(address, data);
     }
 
     /// Pushes a byte of data onto the stack.
@@ -188,8 +188,11 @@ impl CPU {
     fn load(&mut self, program: Vec<u8>) {
         // self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program);
         // self.mem_write_u16(0xFFFC, 0x8000);
-        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program);
-        self.mem_write_u16(0xFFFC, 0x0600);
+        for i in 0..program.len() as u16 {
+            self.mem_write(0x0600 + i, program[i as usize]);
+        }
+        // FIX:
+        // self.mem_write_u16(0xFFFC, 0x0600);
     }
 
     /// Resets the CPU to its initial state.
@@ -201,7 +204,9 @@ impl CPU {
         self.register_x = 0;
         self.status = 0;
 
-        self.program_counter = self.mem_read_u16(0xFFFC);
+        // FIX:
+        // self.program_counter = self.mem_read_u16(0xFFFC);
+        self.program_counter = 0x0600;
     }
 
     /// Runs a program, loading it into memory and resetting the CPU.
@@ -1434,16 +1439,16 @@ mod test {
     #[test]
     fn test_0xad_lda_opcode() {
         let mut cpu = CPU::new();
-        cpu.mem_write(0xaa12, 0x7a);
-        cpu.run(vec![0xad, 0x12, 0xaa, 0x00]);
+        cpu.mem_write(0x0a12, 0x7a);
+        cpu.run(vec![0xad, 0x12, 0x0a, 0x00]);
         assert_eq!(cpu.register_a, 0x7a);
     }
 
     #[test]
     fn test_0xbd_lda_opcode() {
         let mut cpu = CPU::new();
-        cpu.mem_write(0xaa16, 0x7a);
-        cpu.load(vec![0xbd, 0x12, 0xaa, 0x00]);
+        cpu.mem_write(0x1a16, 0x7a);
+        cpu.load(vec![0xbd, 0x12, 0x1a, 0x00]);
         cpu.reset();
         cpu.register_x = 0x04;
         cpu.execute_program();
@@ -1453,8 +1458,8 @@ mod test {
     #[test]
     fn test_0xb9_lda_opcode() {
         let mut cpu = CPU::new();
-        cpu.mem_write(0xaa16, 0x7a);
-        cpu.load(vec![0xb9, 0x12, 0xaa, 0x00]);
+        cpu.mem_write(0x1a16, 0x7a);
+        cpu.load(vec![0xb9, 0x12, 0x1a, 0x00]);
         cpu.reset();
         cpu.register_y = 0x04;
         cpu.execute_program();
@@ -1586,44 +1591,14 @@ mod test {
     }
 
     #[test]
-    fn test_mem_read() {
-        let mut cpu = CPU::new();
-        cpu.memory[0x12ab] = 100;
-        assert_eq!(cpu.mem_read(0x12ab), 100);
-    }
-
-    #[test]
-    fn test_mem_write() {
-        let mut cpu = CPU::new();
-        cpu.mem_write(0x12ab, 100);
-        assert_eq!(cpu.memory[0x12ab], 100);
-    }
-
-    #[test]
-    fn test_mem_read_u16() {
-        let mut cpu = CPU::new();
-        cpu.memory[0x12ab] = 0x10;
-        cpu.memory[0x12ac] = 0x11;
-        assert_eq!(cpu.mem_read_u16(0x12ab), 0x1110);
-    }
-
-    #[test]
-    fn test_mem_write_u16() {
-        let mut cpu = CPU::new();
-        cpu.mem_write_u16(0x12ab, 0x10ab);
-        assert_eq!(cpu.memory[0x12ab], 0xab);
-        assert_eq!(cpu.memory[0x12ac], 0x10);
-    }
-
-    #[test]
     fn test_load_program() {
         let mut cpu = CPU::new();
         cpu.load(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
-        assert_eq!(cpu.memory[0x8000], 0xa9);
-        assert_eq!(cpu.memory[0x8001], 0xc0);
-        assert_eq!(cpu.memory[0x8002], 0xaa);
-        assert_eq!(cpu.memory[0x8003], 0xe8);
-        assert_eq!(cpu.memory[0x8004], 0x00);
+        assert_eq!(cpu.bus.mem_read_u16(0x8000), 0xa9);
+        assert_eq!(cpu.bus.mem_read_u16(0x8001), 0xc0);
+        assert_eq!(cpu.bus.mem_read_u16(0x8002), 0xaa);
+        assert_eq!(cpu.bus.mem_read_u16(0x8003), 0xe8);
+        assert_eq!(cpu.bus.mem_read_u16(0x8004), 0x00);
         assert_eq!(cpu.mem_read_u16(0xFFFC), 0x8000);
     }
 
@@ -4098,13 +4073,13 @@ mod test {
         let mut cpu = CPU::new();
 
         // Load STA instruction for Absolute mode (0x8D)
-        cpu.load(vec![0x8D, 0x00, 0x20]); // STA $2000 (store A register at memory address 0x2000)
+        cpu.load(vec![0x8D, 0x00, 0x12]); // STA $2000 (store A register at memory address 0x2000)
         cpu.reset();
         cpu.register_a = 0x99; // Set A register to 0x99
         cpu.execute_program();
 
         // The memory address 0x2000 should now contain the value from the A register (0x99)
-        assert_eq!(cpu.mem_read(0x2000), 0x99);
+        assert_eq!(cpu.mem_read(0x1200), 0x99);
     }
 
     #[test]
@@ -4141,13 +4116,13 @@ mod test {
         let mut cpu = CPU::new();
 
         // Load STX instruction for Absolute mode (0x8E)
-        cpu.load(vec![0x8E, 0x00, 0x20]); // STX $2000 (store X register at memory address 0x2000)
+        cpu.load(vec![0x8E, 0x00, 0x12]); // STX $2000 (store X register at memory address 0x2000)
         cpu.reset();
         cpu.register_x = 0x99; // Set X register to 0x99
         cpu.execute_program();
 
-        // The memory address 0x2000 should now contain the value from the X register (0x99)
-        assert_eq!(cpu.mem_read(0x2000), 0x99);
+        // The memory address 0x1200 should now contain the value from the X register (0x99)
+        assert_eq!(cpu.mem_read(0x1200), 0x99);
     }
 
     #[test]
@@ -4184,13 +4159,13 @@ mod test {
         let mut cpu = CPU::new();
 
         // Load STY instruction for Absolute mode (0x8C)
-        cpu.load(vec![0x8C, 0x00, 0x20]); // STY $2000 (store Y register at memory address 0x2000)
+        cpu.load(vec![0x8C, 0x00, 0x12]); // STY $2000 (store Y register at memory address 0x2000)
         cpu.reset();
         cpu.register_y = 0x99; // Set Y register to 0x99
         cpu.execute_program();
 
         // The memory address 0x2000 should now contain the value from the Y register (0x99)
-        assert_eq!(cpu.mem_read(0x2000), 0x99);
+        assert_eq!(cpu.mem_read(0x1200), 0x99);
     }
 
     #[test]
