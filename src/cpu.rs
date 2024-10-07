@@ -2,11 +2,22 @@ use core::panic;
 
 use crate::instruction::{AddressingMode, Instruction};
 
-/// Status Flags
-///   7   6   5   4   3   2   1   0
+/// Represents the status flags of the 6502 CPU, stored in a single byte.
+/// Each bit of the byte is mapped to a specific flag, represented in binary:
+///
 /// +---+---+---+---+---+---+---+---+
 /// | N | V | - | B | D | I | Z | C |
 /// +---+---+---+---+---+---+---+---+
+///
+/// Where:
+/// - `N`: Negative flag (bit 7)
+/// - `V`: Overflow flag (bit 6)
+/// - `-`: Unused (bit 5)
+/// - `B`: Break flag (bit 4)
+/// - `D`: Decimal mode flag (bit 3)
+/// - `I`: Interrupt disable flag (bit 2)
+/// - `Z`: Zero flag (bit 1)
+/// - `C`: Carry flag (bit 0)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusFlag {
     Carry = 0b0000_0001,
@@ -20,23 +31,36 @@ pub enum StatusFlag {
 }
 
 impl StatusFlag {
+    /// Returns the bitmask associated with the status flag as a `u8`.
     pub fn to_mask(self) -> u8 {
         self as u8
     }
 }
 
+/// Structure representing the 6502 CPU.
+///
+/// The CPU contains registers, status flags, a program counter, a stack pointer,
+/// and memory. It provides methods to execute instructions and manipulate the CPU state.
 #[derive(Debug)]
 pub struct CPU {
+    /// Accumulator Register (A)
     register_a: u8,
+    /// Index Register X
     register_x: u8,
+    /// Index Register Y
     register_y: u8,
+    /// Processor Status Register (P)
     status: u8,
+    /// Program Counter (PC)
     program_counter: u16,
+    /// Stack Pointer (SP)
     stack_ptr: u8,
+    /// Memory of the system (64KB)
     memory: [u8; 0xFFFF + 1],
 }
 
 impl CPU {
+    /// Creates a new instance of the CPU, initializing all registers and memory.
     pub fn new() -> Self {
         CPU {
             register_a: 0,
@@ -49,18 +73,27 @@ impl CPU {
         }
     }
 
+    /// Sets the given `flag` in the status register.
     fn set_flag(&mut self, flag: StatusFlag) {
         self.status |= flag.to_mask();
     }
 
+    /// Clears the given `flag` in the status register.
     fn clear_flag(&mut self, flag: StatusFlag) {
         self.status &= !flag.to_mask();
     }
 
+    /// Checks if the given `flag` is set in the status register.
     fn is_flag_set(&self, flag: StatusFlag) -> bool {
         self.status & flag.to_mask() != 0
     }
 
+    /// Copies the value of a bit from a source byte to a status flag.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - The source byte containing the bit to copy.
+    /// * `flag` - The `StatusFlag` representing the bit to copy.
     fn copy_bit_from(&mut self, src: u8, flag: StatusFlag) {
         if src & flag.to_mask() != 0 {
             self.set_flag(flag);
@@ -69,6 +102,7 @@ impl CPU {
         }
     }
 
+    /// Sets or clears the given `flag` based on the `condition`.
     fn set_flag_conditionally(&mut self, flag: StatusFlag, condition: bool) {
         if condition {
             self.set_flag(flag);
@@ -77,25 +111,31 @@ impl CPU {
         }
     }
 
+    /// Reads a byte from memory at the specified `address`.
     pub fn mem_read(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
 
+    /// Writes a byte of `data` to memory at the specified `address`.
     pub fn mem_write(&mut self, address: u16, data: u8) {
         self.memory[address as usize] = data;
     }
 
+    /// Reads two bytes from memory at the specified `address`, returning a 16-bit value.
+    /// This is little-endian, meaning the least significant byte is read first.
     fn mem_read_u16(&self, address: u16) -> u16 {
         let lsb = self.mem_read(address) as u16;
         let msb = self.mem_read(address + 1) as u16;
         (msb << 8) | (lsb as u16)
     }
 
+    /// Writes a 16-bit value to memory at the specified `address`.
     fn mem_write_u16(&mut self, address: u16, data: u16) {
         let le_bytes = data.to_le_bytes();
         self.memory[address as usize..=address as usize + 1].copy_from_slice(&le_bytes);
     }
 
+    /// Pushes a byte of data onto the stack.
     fn stack_push(&mut self, data: u8) {
         if self.stack_ptr == 0x00 {
             panic!("Stack overflow! Cannot push more data.");
@@ -108,6 +148,7 @@ impl CPU {
         self.stack_ptr = self.stack_ptr.wrapping_sub(1);
     }
 
+    /// Pops a byte of data from the stack.
     fn stack_pop(&mut self) -> u8 {
         // Check for stack underflow (stack pointer should not exceed 0xFF)
         if self.stack_ptr == 0xFF {
@@ -121,6 +162,7 @@ impl CPU {
         self.mem_read(stack_address)
     }
 
+    /// Pushes a 16-bit value onto the stack (MSB first).
     fn stack_push_u16(&mut self, data: u16) {
         let msb = (data >> 8) as u8;
         let lsb = (data & 0xff) as u8;
@@ -128,6 +170,7 @@ impl CPU {
         self.stack_push(lsb);
     }
 
+    /// Pops a 16-bit value from the stack (LSB first).
     fn stack_pop_u16(&mut self) -> u16 {
         let lsb = self.stack_pop() as u16;
         let msb = self.stack_pop() as u16;
@@ -135,10 +178,12 @@ impl CPU {
         msb << 8 | lsb
     }
 
+    /// Updates the program counter by the size of the current instruction.
     fn update_program_counter(&mut self, instruction: &Instruction) {
         self.program_counter += instruction.size as u16 - 1;
     }
 
+    /// Loads the  program into memory starting at a predefined address.
     // TODO: update
     fn load(&mut self, program: Vec<u8>) {
         // self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program);
@@ -147,6 +192,10 @@ impl CPU {
         self.mem_write_u16(0xFFFC, 0x0600);
     }
 
+    /// Resets the CPU to its initial state.
+    ///
+    /// Resets registers, status flags, and sets the program counter to the address
+    /// specified by the reset vector.
     fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
@@ -155,12 +204,14 @@ impl CPU {
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
+    /// Runs a program, loading it into memory and resetting the CPU.
     pub fn run(&mut self, program: Vec<u8>) {
         self.load(program);
         self.reset();
         self.execute_program();
     }
 
+    /// Runs the program with a provided callback function that can observe or modify CPU state after each instruction execution.
     pub fn run_with_callback<F>(&mut self, program: Vec<u8>, callback: F)
     where
         F: FnMut(&mut Self),
@@ -170,10 +221,12 @@ impl CPU {
         self.execute_program_with_callback(callback);
     }
 
+    /// Executes the loaded program without any callbacks.
     pub fn execute_program(&mut self) {
         self.execute_program_with_callback(|_| {});
     }
 
+    /// Executes the program with a provided callback function after each instruction.
     pub fn execute_program_with_callback<F>(&mut self, mut callback: F)
     where
         F: FnMut(&mut Self),
@@ -365,7 +418,24 @@ impl CPU {
         }
     }
 
-    /// Read bout Addressing Modes implementations: https://www.nesdev.org/obelisk-6502-guide/addressing.html
+    /// Computes the operand address based on the addressing mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - The `AddressingMode` to compute the address for.
+    ///
+    /// # Returns
+    ///
+    /// A 16-bit address representing the operand location.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the addressing mode is `Implied` or `Accumulator`, as they do not require an operand address.
+    ///
+    /// # Note
+    ///
+    /// For detailed information on addressing modes, see:
+    /// [6502 Addressing Modes](https://www.nesdev.org/obelisk-6502-guide/addressing.html)
     fn operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
             //  specail cases, must be handled separately
@@ -431,6 +501,7 @@ impl CPU {
         }
     }
 
+    /// Sets the Zero and Negative flags based on a register value.
     fn set_zero_and_negative_flags(&mut self, register: u8) {
         // Clear zero and negative flags
         self.clear_flag(StatusFlag::Zero);
@@ -447,6 +518,13 @@ impl CPU {
 }
 
 impl CPU {
+    /// ADC (Add with Carry) - Adds the operand and the carry flag to the accumulator (A).
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if the result exceeds 255 (i.e., there's a carry out), cleared otherwise.
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Overflow (V)**: Set if there is a signed overflow (i.e., the sign bit of the result differs from the operands' sign bit).
+    /// - **Negative (N)**: Set if the result has its most significant bit set (indicating a negative value in two's complement).
     fn adc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -475,34 +553,58 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// AND - Performs a bitwise AND between the accumulator (A) and the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn and(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
+        // Perform bitwise AND between A and the operand.
         self.register_a &= operand;
 
+        // Set Zero and Negative flags based on the result.
         self.set_zero_and_negative_flags(self.register_a);
 
         self.update_program_counter(&instruction);
     }
 
+    /// ASL (Arithmetic Shift Left) - Shifts the operand one bit left. Bit 0 is set to 0, and bit 7 is shifted into the Carry flag.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if bit 7 of the operand was set before the shift.
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn asl(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         match instruction.mode {
+            // Shift accumulator
             AddressingMode::Accumulator => {
+                // Update Carry flag if bit 7 of the accumulator is set.
                 self.set_flag_conditionally(StatusFlag::Carry, self.register_a & 0b1000_0000 != 0);
+
+                // Perform the shift.
                 self.register_a = self.register_a << 1;
+
+                // Set Zero and Negative flags based on the result.
                 self.set_zero_and_negative_flags(self.register_a);
             }
+            // Shift memory operand
             _ => {
                 let address = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
+                // Update Carry flag if bit 7 of the operand is set.
                 self.set_flag_conditionally(StatusFlag::Carry, operand & 0b1000_0000 != 0);
 
+                // Perform the shift.
                 let res = operand << 1;
                 self.mem_write(address, res);
+
+                // Set Zero and Negative flags based on the result.
                 self.set_zero_and_negative_flags(res);
             }
         }
@@ -510,110 +612,159 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// Branch (BCC, BCS, BEQ, etc.) - Updates the program counter if a condition is met (based on a flag status).
+    ///
+    /// **Flags affected**: None (branches do not affect processor flags).
     fn branch(&mut self, opcode: u8, condition: bool) {
         let instruction = Instruction::from(opcode);
         let offset = self.operand_address(&instruction.mode) as i8;
         self.update_program_counter(&instruction);
 
+        // If the branch condition is met, update the program counter.
         if condition {
-            // jump to address
             self.program_counter = self.program_counter.wrapping_add(offset as u16);
         }
     }
 
+    /// BCC (Branch if Carry Clear) - Branches to the specified address if the Carry flag is clear (0).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bcc(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Carry));
     }
 
+    /// BCS (Branch if Carry Set) - Branches to the specified address if the Carry flag is set (1).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bcs(&mut self, opcode: u8) {
         self.branch(opcode, self.is_flag_set(StatusFlag::Carry));
     }
 
+    /// BEQ (Branch if Equal) - Branches to the specified address if the Zero flag is set (1).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn beq(&mut self, opcode: u8) {
         self.branch(opcode, self.is_flag_set(StatusFlag::Zero));
     }
 
+    /// BIT - Tests bits in the memory operand against the accumulator (A) without affecting A.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result of A & M is zero.
+    /// - **Overflow (V)**: Set to bit 6 of the memory operand.
+    /// - **Negative (N)**: Set to bit 7 of the memory operand.
     fn bit(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
+        // Update Zero flag based on the result of A & M.
         self.set_flag_conditionally(StatusFlag::Zero, self.register_a & operand == 0);
 
+        // Copy bit 6 of the operand into the Overflow flag.
         self.copy_bit_from(operand, StatusFlag::Overflow);
+
+        // Copy bit 7 of the operand into the Negative flag.
         self.copy_bit_from(operand, StatusFlag::Negative);
 
         self.update_program_counter(&instruction);
     }
 
+    /// BMI (Branch if Minus) - Branches to the specified address if the Negative flag is set (1).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bmi(&mut self, opcode: u8) {
         self.branch(opcode, self.is_flag_set(StatusFlag::Negative));
     }
 
+    /// BNE (Branch if Not Equal) - Branches to the specified address if the Zero flag is clear (0).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bne(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Zero));
     }
 
+    /// BPL (Branch if Positive) - Branches to the specified address if the Negative flag is clear (0).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bpl(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Negative));
     }
 
+    /// BRK (Force Interrupt) - Triggers a software interrupt by pushing the current state onto the stack and jumping to the interrupt vector.
+    ///
+    /// **Flags affected**:
+    /// - **Break (B)**: Set when BRK is executed.
+    /// - **Interrupt (I)**: Set after the interrupt is triggered.
     fn brk(&mut self) {
-        // Push the current PC (next instruction address) onto the stack
+        // Push the current PC (next instruction address) onto the stack.
         let pc_msb = (self.program_counter >> 8) as u8;
         let pc_lsb = self.program_counter as u8;
         self.stack_push(pc_msb);
         self.stack_push(pc_lsb);
 
-        // Push the processor status onto the stack (with the Break flag set)
+        // Push the processor status onto the stack (with Break flag set).
         self.set_flag(StatusFlag::Break);
-        self.set_flag(StatusFlag::Unused); // set to 1 as per 6502 conventions
+        self.set_flag(StatusFlag::Unused); // Unused flag is always set to 1 as per 6502 conventions.
         self.stack_push(self.status);
 
-        // Fetch the interrupt vector address from $FFFE-$FFFF
+        // Fetch the interrupt vector address from $FFFE-$FFFF.
         let irq_lsb = self.mem_read(0xFFFE);
         let irq_msb = self.mem_read(0xFFFF);
         let irq_vector = (irq_msb as u16) << 8 | (irq_lsb as u16);
 
+        // Set the program counter to the interrupt vector.
         self.program_counter = irq_vector;
     }
 
+    /// BVC (Branch if Overflow Clear) - Branches to the specified address if the Overflow flag is clear (0).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bvc(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Overflow));
     }
 
+    /// BVS (Branch if Overflow Set) - Branches to the specified address if the Overflow flag is set (1).
+    ///
+    /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bvs(&mut self, opcode: u8) {
         self.branch(opcode, self.is_flag_set(StatusFlag::Overflow));
     }
 
+    /// CLC (Clear Carry Flag) - Clears the Carry flag.
     fn clc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Carry);
-
         self.update_program_counter(&instruction);
     }
 
+    /// CLD (Clear Decimal Mode) - Clears the Decimal flag.
     fn cld(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Decimal);
-
         self.update_program_counter(&instruction);
     }
 
+    /// CLI (Clear Interrupt Disable) - Clears the Interrupt Disable flag.
     fn cli(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Interrupt);
-
         self.update_program_counter(&instruction);
     }
 
+    /// CLV (Clear Overflow Flag) - Clears the Overflow flag.
     fn clv(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.clear_flag(StatusFlag::Overflow);
-
         self.update_program_counter(&instruction);
     }
 
+    /// Compare Helper - Compares a register with the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if the register is greater than or equal to the operand, cleared otherwise.
+    /// - **Zero (Z)**: Set if the register is equal to the operand, cleared otherwise.
+    /// - **Negative (N)**: Set if the result of the subtraction (register - operand) is negative.
     fn compare(&mut self, opcode: u8, register: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -627,18 +778,42 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// CMP (Compare with Accumulator) - Compares the accumulator (A) with the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if A is greater than or equal to the operand, cleared otherwise.
+    /// - **Zero (Z)**: Set if A is equal to the operand, cleared otherwise.
+    /// - **Negative (N)**: Set if the result of A - operand is negative.
     fn cmp(&mut self, opcode: u8) {
         self.compare(opcode, self.register_a);
     }
 
+    /// CPX (Compare with X Register) - Compares the X register with the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if X is greater than or equal to the operand, cleared otherwise.
+    /// - **Zero (Z)**: Set if X is equal to the operand, cleared otherwise.
+    /// - **Negative (N)**: Set if the result of X - operand is negative.
     fn cpx(&mut self, opcode: u8) {
         self.compare(opcode, self.register_x);
     }
 
+    /// CPY (Compare with Y Register) - Compares the Y register with the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if Y is greater than or equal to the operand, cleared otherwise.
+    /// - **Zero (Z)**: Set if Y is equal to the operand, cleared otherwise.
+    /// - **Negative (N)**: Set if the result of Y - operand is negative.
     fn cpy(&mut self, opcode: u8) {
         self.compare(opcode, self.register_y);
     }
 
+    /// CPY (Compare with Y Register) - Compares the Y register with the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if Y is greater than or equal to the operand, cleared otherwise.
+    /// - **Zero (Z)**: Set if Y is equal to the operand, cleared otherwise.
+    /// - **Negative (N)**: Set if the result of Y - operand is negative.
     fn dec(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -652,6 +827,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// DEX (Decrement X Register) - Decrements the X register by one.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn dex(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
 
@@ -661,6 +841,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// DEY (Decrement Y Register) - Decrements the Y register by one.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn dey(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
 
@@ -670,6 +855,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// EOR (Exclusive OR) - Performs a bitwise exclusive OR (XOR) between the accumulator (A) and the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn eor(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -682,6 +872,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// INC (Increment Memory) - Increments the value at the memory address by one.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn inc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -695,6 +890,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// INX (Increment X Register) - Increments the X register by one.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn inx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_x.wrapping_add(1);
@@ -703,6 +903,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// INY (Increment Y Register) - Increments the Y register by one.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn iny(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_y = self.register_y.wrapping_add(1);
@@ -711,6 +916,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// JMP (Jump to Address) - Jumps to the specified address.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn jmp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -718,6 +926,9 @@ impl CPU {
         self.program_counter = address;
     }
 
+    /// JSR (Jump to Subroutine) - Jumps to the specified address and saves the return address on the stack.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn jsr(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let subroutine_address = self.operand_address(&instruction.mode);
@@ -727,6 +938,11 @@ impl CPU {
         self.program_counter = subroutine_address;
     }
 
+    /// LDA (Load Accumulator) - Loads the memory operand into the accumulator (A).
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn lda(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -738,6 +954,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// LDX (Load X Register) - Loads the memory operand into the X register.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ldx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -749,6 +970,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// LDY (Load Y Register) - Loads the memory operand into the Y register.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ldy(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -760,6 +986,12 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// LSR (Logical Shift Right) - Shifts the operand one bit to the right. Bit 0 is shifted into the Carry flag.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if bit 0 of the operand was set before the shift.
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Always cleared after an LSR operation (as the result will always be positive).
     fn lsr(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         match instruction.mode {
@@ -784,12 +1016,18 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// NOP (No Operation) - Does nothing for one clock cycle.
     fn nop(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
 
         self.update_program_counter(&instruction);
     }
 
+    /// ORA (Logical Inclusive OR) - Performs a bitwise inclusive OR between the accumulator (A) and the memory operand.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ora(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -802,6 +1040,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// PHA (Push Accumulator onto Stack) - Pushes the value of the accumulator onto the stack.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn pha(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.stack_push(self.register_a);
@@ -809,6 +1050,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// PHP (Push Processor Status onto Stack) - Pushes the processor status onto the stack.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn php(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.stack_push(self.status);
@@ -816,6 +1060,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// PLA (Pull Accumulator from Stack) - Pulls the value from the stack into the accumulator.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn pla(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_a = self.stack_pop();
@@ -824,6 +1073,10 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// PLP (Pull Processor Status from Stack) - Pulls the processor status from the stack.
+    ///
+    /// **Flags affected**:
+    /// - The flags in the processor status register are updated based on the value pulled from the stack.
     fn plp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.status = self.stack_pop();
@@ -831,6 +1084,12 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// ROL (Rotate Left) - Rotates the bits in the operand to the left. Bit 7 goes into the Carry flag.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if the most significant bit (bit 7) of the operand was set before the rotation.
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn rol(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         match instruction.mode {
@@ -856,6 +1115,12 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// ROR (Rotate Right) - Rotates the bits in the operand to the right. Bit 0 goes into the Carry flag.
+    ///
+    /// **Flags affected**:
+    /// - **Carry (C)**: Set if the least significant bit (bit 0) of the operand was set before the rotation.
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ror(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         match instruction.mode {
@@ -881,6 +1146,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// RTI (Return from Interrupt) - Restores the processor state from the stack.
+    ///
+    /// **Flags affected**:
+    /// - **Status Flags**: Restores the processor status flags from the stack.
+    /// - **Program Counter (PC)**: Updated to the return address.
     fn rti(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.status = self.stack_pop();
@@ -889,6 +1159,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// RTS (Return from Subroutine) - Returns from a subroutine, pulling the return address from the stack.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn rts(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         // According to the 6502 specification, after pulling the address from the stack, the program counter should be incremented by 1.
@@ -897,6 +1170,13 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// SBC (Subtract with Carry) - Subtracts the memory operand from the accumulator (A) with carry consideration.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
+    /// - **Carry (C)**: Set if there was no borrow (i.e., the result is greater than or equal to zero).
+    /// - **Overflow (V)**: Set if the signed overflow occurred (i.e., subtracting a negative number resulted in a positive result).
     fn sbc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -932,6 +1212,7 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// SEC (Set Carry Flag) - Sets the Carry flag.
     fn sec(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Carry);
@@ -939,6 +1220,7 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// SED (Set Decimal Flag) - Sets the Decimal flag.
     fn sed(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Decimal);
@@ -946,6 +1228,7 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// SEI (Set Interrupt Disable Flag) - Sets the Interrupt Disable flag.
     fn sei(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.set_flag(StatusFlag::Interrupt);
@@ -953,6 +1236,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// STA (Store Accumulator) - Stores the value of the accumulator (A) into the specified memory address.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn sta(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -961,6 +1247,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// STX (Store X Register) - Stores the value of the X register into the specified memory address.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn stx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -969,6 +1258,9 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// STY (Store Y Register) - Stores the value of the Y register into the specified memory address.
+    ///
+    /// **Flags affected**: No flags are affected by this operation.
     fn sty(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
@@ -977,6 +1269,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// TAX (Transfer Accumulator to X Register) - Transfers the value of the accumulator (A) to the X register.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn tax(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.register_a;
@@ -985,6 +1282,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// TAY (Transfer Accumulator to Y Register) - Transfers the value of the accumulator (A) to the Y register.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn tay(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_y = self.register_a;
@@ -993,6 +1295,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// TSX (Transfer Stack Pointer to X Register) - Transfers the value of the stack pointer (SP) to the X register.
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn tsx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_x = self.stack_ptr;
@@ -1001,6 +1308,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// TXA (Transfer X Register to Accumulator) - Transfers the value of the X register to the accumulator (A).
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn txa(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_a = self.register_x;
@@ -1009,6 +1321,7 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// TXS (Transfer X to Stack Pointer) - Transfers the value of the X register to the stack pointer.
     fn txs(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.stack_ptr = self.register_x;
@@ -1017,6 +1330,11 @@ impl CPU {
         self.update_program_counter(&instruction);
     }
 
+    /// TYA (Transfer Y Register to Accumulator) - Transfers the value of the Y register to the accumulator (A).
+    ///
+    /// **Flags affected**:
+    /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
+    /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn tya(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.register_a = self.register_y;
