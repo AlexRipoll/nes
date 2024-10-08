@@ -6,6 +6,7 @@ use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::EventPump;
 
 mod bus;
+mod cartridge;
 mod cpu;
 mod instruction;
 
