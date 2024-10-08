@@ -2,6 +2,7 @@ use core::panic;
 
 use crate::{
     bus::Bus,
+    cartridge::Rom,
     instruction::{AddressingMode, Instruction},
 };
 
@@ -64,7 +65,7 @@ pub struct CPU {
 
 impl CPU {
     /// Creates a new instance of the CPU, initializing all registers and memory.
-    pub fn new() -> Self {
+    pub fn new(rom: Rom) -> Self {
         CPU {
             register_a: 0,
             register_x: 0,
@@ -72,7 +73,7 @@ impl CPU {
             status: 0,
             program_counter: 0,
             stack_ptr: 0xFD,
-            bus: Bus::new(),
+            bus: Bus::new(rom),
         }
     }
 
@@ -1351,11 +1352,40 @@ impl CPU {
 
 #[cfg(test)]
 mod test {
-    use crate::cpu::{StatusFlag, CPU};
+    use crate::{
+        cartridge::{Rom, CHR_ROM_8KB_UNITS, PRG_ROM_16KB_UNITS},
+        cpu::{StatusFlag, CPU},
+    };
+
+    fn rom_init() -> Rom {
+        let mut raw_rom_data = vec![
+            0x4E,
+            0x45,
+            0x53,
+            0x1A,        // iNES header
+            0x01,        // 1 unit of 16KB PRG ROM
+            0x01,        // 1 unit of 8KB CHR ROM
+            0b0000_0001, // Mirroring = Vertical, no trainer
+            0b0000_0000, // Mapper info
+            0x00,
+            0x00,
+            0x00,
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+        ];
+        raw_rom_data.extend(vec![0xFF; PRG_ROM_16KB_UNITS]); // 16KB PRG ROM filled with 0xFF
+        raw_rom_data.extend(vec![0xFF; CHR_ROM_8KB_UNITS]); // 8KB CHR ROM filled with 0xFF
+
+        Rom::new(raw_rom_data).unwrap()
+    }
 
     #[test]
     fn test_set_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Set Carry flag
         cpu.set_flag(StatusFlag::Carry);
@@ -1377,7 +1407,8 @@ mod test {
 
     #[test]
     fn test_clear_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Initially set Carry and Zero flags
         cpu.set_flag(StatusFlag::Carry);
@@ -1397,7 +1428,8 @@ mod test {
 
     #[test]
     fn test_0xa9_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.run(vec![0xa9, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 0x05);
         assert!(cpu.status & 0b1000_0010 == 0);
@@ -1405,21 +1437,24 @@ mod test {
 
     #[test]
     fn test_0xa9_lda_opcode_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.run(vec![0xa9, 0x00, 0x00]);
         assert!(cpu.status & 0b0000_0010 == 0b10);
     }
 
     #[test]
     fn test_0xa9_lda_opcode_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.run(vec![0xa9, 0xf0, 0x00]);
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000);
     }
 
     #[test]
     fn test_0xa5_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x05, 0x7a);
         cpu.run(vec![0xa5, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 0x7a);
@@ -1427,7 +1462,8 @@ mod test {
 
     #[test]
     fn test_0xb5_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x16, 0x7a);
         cpu.load(vec![0xb5, 0x12, 0x00]);
         cpu.reset();
@@ -1438,7 +1474,8 @@ mod test {
 
     #[test]
     fn test_0xad_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x0a12, 0x7a);
         cpu.run(vec![0xad, 0x12, 0x0a, 0x00]);
         assert_eq!(cpu.register_a, 0x7a);
@@ -1446,7 +1483,8 @@ mod test {
 
     #[test]
     fn test_0xbd_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x1a16, 0x7a);
         cpu.load(vec![0xbd, 0x12, 0x1a, 0x00]);
         cpu.reset();
@@ -1457,7 +1495,8 @@ mod test {
 
     #[test]
     fn test_0xb9_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x1a16, 0x7a);
         cpu.load(vec![0xb9, 0x12, 0x1a, 0x00]);
         cpu.reset();
@@ -1468,7 +1507,8 @@ mod test {
 
     #[test]
     fn test_0xa1_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x16, 0x07);
         cpu.mem_write(0x17, 0x1a);
         cpu.mem_write(0x1a07, 0x33);
@@ -1481,7 +1521,8 @@ mod test {
 
     #[test]
     fn test_0xa1_lda_opcode_wrapping_overflow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x01, 0xee);
         cpu.mem_write(0x02, 0x12);
         cpu.mem_write(0x12ee, 0x33);
@@ -1494,7 +1535,8 @@ mod test {
 
     #[test]
     fn test_0xb1_lda_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x12, 0x07);
         cpu.mem_write(0x13, 0x1a);
         cpu.mem_write(0x1a0b, 0x33);
@@ -1507,7 +1549,8 @@ mod test {
 
     #[test]
     fn test_0xb1_lda_opcode_wrapping_overflow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.mem_write(0x12, 0xff);
         cpu.mem_write(0x13, 0xff);
         cpu.mem_write(0x01, 0x33);
@@ -1520,7 +1563,8 @@ mod test {
 
     #[test]
     fn test_0xaa_tax_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xaa, 0x00]);
         cpu.reset();
         cpu.register_a = 0x05;
@@ -1531,7 +1575,8 @@ mod test {
 
     #[test]
     fn test_0xaa_tax_opcode_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xaa, 0x00]);
         cpu.reset();
         cpu.register_a = 0x00;
@@ -1541,7 +1586,8 @@ mod test {
 
     #[test]
     fn test_0xaa_tax_opcode_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xaa, 0x00]);
         cpu.reset();
         cpu.register_a = 0xf5;
@@ -1551,7 +1597,8 @@ mod test {
 
     #[test]
     fn test_0xe8_inx_opcode() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xe8, 0x00]);
         cpu.reset();
         cpu.register_x = 0x05;
@@ -1562,7 +1609,8 @@ mod test {
 
     #[test]
     fn test_0xe8_inx_opcode_zero_flag_set_with_overflow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xe8, 0x00]);
         cpu.reset();
         cpu.register_x = 0xff;
@@ -1573,7 +1621,8 @@ mod test {
 
     #[test]
     fn test_0xe8_inx_opcode_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xe8, 0x00]);
         cpu.reset();
         cpu.register_x = 0xf5;
@@ -1584,7 +1633,8 @@ mod test {
 
     #[test]
     fn test_opcode_combination() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
 
         assert_eq!(cpu.register_x, 0xc1)
@@ -1592,7 +1642,8 @@ mod test {
 
     #[test]
     fn test_load_program() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
         assert_eq!(cpu.bus.mem_read_u16(0x8000), 0xa9);
         assert_eq!(cpu.bus.mem_read_u16(0x8001), 0xc0);
@@ -1604,7 +1655,8 @@ mod test {
 
     #[test]
     fn test_adc_no_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x69, 20]);
         cpu.reset();
         cpu.register_a = 10; // A = 10
@@ -1618,7 +1670,8 @@ mod test {
 
     #[test]
     fn test_adc_with_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x69, 100]);
         cpu.reset();
         cpu.register_a = 200;
@@ -1632,7 +1685,8 @@ mod test {
 
     #[test]
     fn test_adc_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x69, 126]);
         cpu.reset();
         cpu.register_a = 130;
@@ -1646,7 +1700,8 @@ mod test {
 
     #[test]
     fn test_adc_overflow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x69, 1]);
         cpu.reset();
         cpu.register_a = 127; // A = 127 (positive)
@@ -1660,7 +1715,8 @@ mod test {
 
     #[test]
     fn test_adc_negative() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x69, 0x80]);
         cpu.reset();
         cpu.register_a = 0x80; // A = 128 (negative in two's complement)
@@ -1675,7 +1731,8 @@ mod test {
 
     #[test]
     fn test_adc_with_initial_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x69, 10]);
         cpu.reset();
         cpu.status = 0b0000_0001; // Set the carry flag to 1
@@ -1690,7 +1747,8 @@ mod test {
 
     #[test]
     fn test_and_immediate() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x29, 0b10101010]); // AND Immediate with 0xAA
         cpu.reset();
         cpu.register_a = 0b11001100; // A = 0xCC (204 in decimal)
@@ -1704,7 +1762,8 @@ mod test {
 
     #[test]
     fn test_and_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x29, 0b00110011]); // AND Immediate with 0x33
         cpu.reset();
         cpu.register_a = 0b11001100; // A = 0xCC (204 in decimal)
@@ -1718,7 +1777,8 @@ mod test {
 
     #[test]
     fn test_and_negative_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
         cpu.load(vec![0x29, 0b10101010]); // AND Immediate with 0xAA
         cpu.reset();
         cpu.register_a = 0b11110000; // A = 0xF0 (240 in decimal, negative in two's complement)
@@ -1732,7 +1792,8 @@ mod test {
 
     #[test]
     fn test_asl_accumulator() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the program: ASL Accumulator (0x0A)
         // In this case, we shift 0x81 (10000001 in binary) to the left
@@ -1753,7 +1814,8 @@ mod test {
 
     #[test]
     fn test_asl_accumulator_zero() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the program: ASL Accumulator (0x0A)
         // In this case, we shift 0x80 (10000000 in binary) to the left
@@ -1774,7 +1836,8 @@ mod test {
 
     #[test]
     fn test_asl_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the program: ASL $10 (0x06 0x10)
         // Shift value at memory location 0x0010, initially set to 0x40 (01000000 in binary)
@@ -1795,7 +1858,8 @@ mod test {
 
     #[test]
     fn test_asl_zero_page_with_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the program: ASL $10 (0x06 0x10)
         // Shift value at memory location 0x0010, initially set to 0xFF (11111111 in binary)
@@ -1816,7 +1880,8 @@ mod test {
 
     #[test]
     fn test_asl_zero_page_to_zero() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the program: ASL $10 (0x06 0x10)
         // Shift value at memory location 0x0010, initially set to 0x01 (00000001 in binary)
@@ -1837,7 +1902,8 @@ mod test {
 
     #[test]
     fn test_bcc_no_branch() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BCC instruction with a relative offset of 2
         cpu.load(vec![0x90, 0x02, 0x00]); // BCC with offset 2
@@ -1857,7 +1923,8 @@ mod test {
 
     #[test]
     fn test_bcc_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BCC instruction with a relative offset of 2
         cpu.load(vec![0x90, 0x02]); // BCC with offset 2
@@ -1872,7 +1939,8 @@ mod test {
 
     #[test]
     fn test_bcc_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BCC instruction with a negative offset (-2)
         cpu.load(vec![0x90, 0xFD]); // BCC with offset -3 (0xFE is -3 in two's complement)
@@ -1889,7 +1957,8 @@ mod test {
 
     #[test]
     fn test_bcs_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BCS instruction with a positive offset (+4)
         cpu.load(vec![0xB0, 0x04]); // BCS (0xB0) with offset +4
@@ -1908,7 +1977,8 @@ mod test {
 
     #[test]
     fn test_bcs_no_branch_when_carry_clear() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BCS instruction with a positive offset (+4)
         cpu.load(vec![0xB0, 0x04]); // BCS (0xB0) with offset +4
@@ -1923,7 +1993,8 @@ mod test {
 
     #[test]
     fn test_bcs_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BCS instruction with a negative offset (-2)
         cpu.load(vec![0xB0, 0xFD]); // BCS (0xB0) with offset -2 (0xFE in two's complement is -2)
@@ -1942,7 +2013,8 @@ mod test {
 
     #[test]
     fn test_beq_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a positive offset (+4)
         cpu.load(vec![0xF0, 0x04]); // BEQ (0xF0) with offset +4
@@ -1960,7 +2032,8 @@ mod test {
 
     #[test]
     fn test_beq_no_branch_when_zero_clear() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a positive offset (+4)
         cpu.load(vec![0xF0, 0x04]); // BEQ (0xF0) with offset +4
@@ -1974,7 +2047,8 @@ mod test {
 
     #[test]
     fn test_beq_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a negative offset (-2)
         cpu.load(vec![0xF0, 0xFD]); // BEQ (0xF0) with offset -2 (0xFE in two's complement is -2)
@@ -1993,7 +2067,8 @@ mod test {
 
     #[test]
     fn test_bit_zero_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BIT instruction (0x24 for Zero Page) and a memory value into Zero Page
         cpu.mem_write(0x10, 0x00); // Write 0x00 to memory location 0x10
@@ -2008,7 +2083,8 @@ mod test {
 
     #[test]
     fn test_bit_negative_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Write a value with bit 7 set (0x80) to memory location 0x10
         cpu.mem_write(0x10, 0x80);
@@ -2023,7 +2099,8 @@ mod test {
 
     #[test]
     fn test_bit_overflow_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Write a value with bit 6 set (0x40) to memory location 0x10
         cpu.mem_write(0x10, 0x40);
@@ -2038,7 +2115,8 @@ mod test {
 
     #[test]
     fn test_bit_no_flags_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Write a value with neither bit 6 nor bit 7 set (0x3F) to memory location 0x10
         cpu.mem_write(0x10, 0x3F);
@@ -2057,7 +2135,8 @@ mod test {
 
     #[test]
     fn test_bmi_branch_taken() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BMI instruction with a positive offset (e.g., +9)
         cpu.load(vec![0x30, 0x09]); // BMI with offset +9
@@ -2073,7 +2152,8 @@ mod test {
 
     #[test]
     fn test_bmi_no_branch() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BMI instruction with a positive offset (e.g., +4)
         cpu.load(vec![0x30, 0x04]); // BMI with offset +4
@@ -2087,7 +2167,8 @@ mod test {
 
     #[test]
     fn test_bne_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BNE instruction with a positive offset (+4)
         cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
@@ -2104,7 +2185,8 @@ mod test {
 
     #[test]
     fn test_bne_no_branch_when_zero_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a positive offset (+4)
         cpu.load(vec![0xD0, 0x04]); // BNE (0xD0) with offset +4
@@ -2119,7 +2201,8 @@ mod test {
 
     #[test]
     fn test_bne_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a negative offset (-2)
         cpu.load(vec![0xD0, 0xFD]); // BNE (0xD0) with offset -2 (0xFE in two's complement is -2)
@@ -2136,7 +2219,8 @@ mod test {
 
     #[test]
     fn test_bpl_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BPL instruction with a positive offset (+4)
         cpu.load(vec![0x10, 0x04]); // BPL (0x10) with offset +4
@@ -2153,7 +2237,8 @@ mod test {
 
     #[test]
     fn test_bpl_no_branch_when_negative_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a positive offset (+4)
         cpu.load(vec![0x10, 0x04]); // BPL (0x10) with offset +4
@@ -2168,7 +2253,8 @@ mod test {
 
     #[test]
     fn test_bpl_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BEQ instruction with a negative offset (-2)
         cpu.load(vec![0x10, 0xFD]); // BPL (0x10) with offset -2 (0xFE in two's complement is -2)
@@ -2186,7 +2272,8 @@ mod test {
     #[test]
     #[should_panic(expected = "Stack overflow! Cannot push more data.")]
     fn test_stack_push_overflow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Set the stack pointer to 0x00 (stack is full)
         cpu.stack_ptr = 0x00;
@@ -2199,7 +2286,8 @@ mod test {
     //  TODO:
     // #[test]
     // fn test_brk_instruction() {
-    //     let mut cpu = CPU::new();
+    // let rom = rom_init();
+    // let mut cpu = CPU::new(rom);
     //
     //     // Setup: Writing the IRQ vector at $FFFE/$FFFF to point to 0x1234 (interrupt handler)
     //     cpu.mem_write(0xFFFE, 0x34); // Low byte of interrupt vector
@@ -2228,7 +2316,8 @@ mod test {
 
     #[test]
     fn test_bvc_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BVC instruction with a positive offset (+4)
         cpu.load(vec![0x50, 0x04]); // BVC (0x50) with offset +4
@@ -2245,7 +2334,8 @@ mod test {
 
     #[test]
     fn test_bvc_no_branch_when_overflow_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BVC instruction with a positive offset (+4)
         cpu.load(vec![0x50, 0x04]); // BVC (0x10) with offset +4
@@ -2260,7 +2350,8 @@ mod test {
 
     #[test]
     fn test_bvc_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BVC instruction with a negative offset (-2)
         cpu.load(vec![0x50, 0xFD]); // BVC (0x10) with offset -2 (0xFE in two's complement is -2)
@@ -2277,7 +2368,8 @@ mod test {
 
     #[test]
     fn test_bvs_branch_forward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BVS instruction with a positive offset (+4)
         cpu.load(vec![0x70, 0x04]); // BVS (0x70) with offset +4
@@ -2295,7 +2387,8 @@ mod test {
 
     #[test]
     fn test_bvs_no_branch_when_overflow_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BVS instruction with a positive offset (+4)
         cpu.load(vec![0x70, 0x04]); // BVS (0x70) with offset +4
@@ -2309,7 +2402,8 @@ mod test {
 
     #[test]
     fn test_bvs_branch_backward() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the BVS instruction with a negative offset (-2)
         cpu.load(vec![0x70, 0xFD]); // BVS (0x70) with offset -2 (0xFE in two's complement is -2)
@@ -2327,7 +2421,8 @@ mod test {
 
     #[test]
     fn test_clc_instruction() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CLC instruction (opcode 0x18)
         cpu.load(vec![0x18]);
@@ -2342,7 +2437,8 @@ mod test {
 
     #[test]
     fn test_cld_instruction() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CLD instruction (opcode 0xD8)
         cpu.load(vec![0xD8]);
@@ -2357,7 +2453,8 @@ mod test {
 
     #[test]
     fn test_cli_instruction() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CLI instruction (opcode 0x58)
         cpu.load(vec![0x58]);
@@ -2372,7 +2469,8 @@ mod test {
 
     #[test]
     fn test_clv_instruction() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CLV instruction (opcode 0xB8)
         cpu.load(vec![0xB8]);
@@ -2387,7 +2485,8 @@ mod test {
 
     #[test]
     fn test_cmp_carry_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CMP instruction with a value less than the accumulator
         cpu.load(vec![0xC9, 0x10]); // CMP with immediate mode, compare with 0x10
@@ -2405,7 +2504,8 @@ mod test {
 
     #[test]
     fn test_cmp_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CMP instruction with a value equal to the accumulator
         cpu.load(vec![0xC9, 0x10]); // CMP with immediate mode
@@ -2423,7 +2523,8 @@ mod test {
 
     #[test]
     fn test_cmp_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CMP instruction with a value greater than the accumulator
         cpu.load(vec![0xC9, 0x20]); // CMP with immediate mode
@@ -2441,7 +2542,8 @@ mod test {
 
     #[test]
     fn test_cmp_carry_flag_clear() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CMP instruction with a value that makes the result negative
         cpu.load(vec![0xC9, 0x80]); // CMP with immediate mode
@@ -2459,7 +2561,8 @@ mod test {
 
     #[test]
     fn test_cpx_carry_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPX instruction with a value less than the X register
         cpu.load(vec![0xE0, 0x10]); // CPX with immediate mode, compare with 0x10
@@ -2477,7 +2580,8 @@ mod test {
 
     #[test]
     fn test_cpx_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPX instruction with a value equal to the X register
         cpu.load(vec![0xE0, 0x10]); // CPX with immediate mode
@@ -2495,7 +2599,8 @@ mod test {
 
     #[test]
     fn test_cpx_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPX instruction with a value greater than the X register
         cpu.load(vec![0xE0, 0x20]); // CPX with immediate mode
@@ -2513,7 +2618,8 @@ mod test {
 
     #[test]
     fn test_cpx_carry_flag_clear() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPX instruction with a value that makes the result negative
         cpu.load(vec![0xE0, 0x80]); // CPX with immediate mode
@@ -2531,7 +2637,8 @@ mod test {
 
     #[test]
     fn test_cpy_carry_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPY instruction with a value less than the Y register
         cpu.load(vec![0xC0, 0x10]); // CPY with immediate mode, compare with 0x10
@@ -2549,7 +2656,8 @@ mod test {
 
     #[test]
     fn test_cpy_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPY instruction with a value equal to the Y register
         cpu.load(vec![0xC0, 0x10]); // CPY with immediate mode
@@ -2567,7 +2675,8 @@ mod test {
 
     #[test]
     fn test_cpy_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPY instruction with a value greater than the Y register
         cpu.load(vec![0xC0, 0x20]); // CPY with immediate mode
@@ -2585,7 +2694,8 @@ mod test {
 
     #[test]
     fn test_cpy_carry_flag_clear() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the CPY instruction with a value that makes the result negative
         cpu.load(vec![0xC0, 0x80]); // CPY with immediate mode
@@ -2603,7 +2713,8 @@ mod test {
 
     #[test]
     fn test_dec_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEC instruction to decrement memory at 0x10
         cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
@@ -2623,7 +2734,8 @@ mod test {
 
     #[test]
     fn test_dec_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEC instruction to decrement memory at 0x10
         cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
@@ -2643,7 +2755,8 @@ mod test {
 
     #[test]
     fn test_dec_positive_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEC instruction to decrement memory at 0x10
         cpu.load(vec![0xC6, 0x10]); // DEC with Zero Page addressing
@@ -2663,7 +2776,8 @@ mod test {
 
     #[test]
     fn test_dex_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEX instruction (Implied mode)
         cpu.load(vec![0xCA]); // DEX instruction
@@ -2683,7 +2797,8 @@ mod test {
 
     #[test]
     fn test_dex_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEX instruction (Implied mode)
         cpu.load(vec![0xCA]); // DEX instruction
@@ -2703,7 +2818,8 @@ mod test {
 
     #[test]
     fn test_dex_positive_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEX instruction (Implied mode)
         cpu.load(vec![0xCA]); // DEX instruction
@@ -2723,7 +2839,8 @@ mod test {
 
     #[test]
     fn test_dey_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEY instruction (Implied mode)
         cpu.load(vec![0x88]); // DEY instruction
@@ -2743,7 +2860,8 @@ mod test {
 
     #[test]
     fn test_dey_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEY instruction (Implied mode)
         cpu.load(vec![0x88]); // DEY instruction
@@ -2763,7 +2881,8 @@ mod test {
 
     #[test]
     fn test_dey_positive_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the DEY instruction (Implied mode)
         cpu.load(vec![0x88]); // DEY instruction
@@ -2783,7 +2902,8 @@ mod test {
 
     #[test]
     fn test_eor_non_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the EOR instruction (Immediate mode) and XOR with 0b10101010
         cpu.load(vec![0x49, 0b10101010]); // EOR #$AA
@@ -2801,7 +2921,8 @@ mod test {
 
     #[test]
     fn test_eor_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the EOR instruction (Immediate mode) and XOR with 0xFF
         cpu.load(vec![0x49, 0xFF]); // EOR #$FF
@@ -2820,7 +2941,8 @@ mod test {
 
     #[test]
     fn test_eor_negative_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the EOR instruction (Immediate mode) and XOR with 0xFF
         cpu.load(vec![0x49, 0x01]); // EOR #$01
@@ -2839,7 +2961,8 @@ mod test {
 
     #[test]
     fn test_eor_zero_accumulator() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the EOR instruction (Immediate mode) and XOR with 0x55
         cpu.load(vec![0x49, 0x55]); // EOR #$55
@@ -2858,7 +2981,8 @@ mod test {
 
     #[test]
     fn test_inc_memory() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for Zero Page addressing
         cpu.load(vec![0xE6, 0x20]); // INC $20
@@ -2878,7 +3002,8 @@ mod test {
 
     #[test]
     fn test_inc_memory_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for Zero Page addressing
         cpu.load(vec![0xE6, 0x20]); // INC $20
@@ -2898,7 +3023,8 @@ mod test {
 
     #[test]
     fn test_inc_memory_negative_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for Zero Page addressing
         cpu.load(vec![0xE6, 0x20]); // INC $20
@@ -2918,7 +3044,8 @@ mod test {
 
     #[test]
     fn test_inx_x_register() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for the X register
         cpu.load(vec![0xE8]); // INC X
@@ -2937,7 +3064,8 @@ mod test {
 
     #[test]
     fn test_inx_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for the X register
         cpu.load(vec![0xE8]); // INC X
@@ -2956,7 +3084,8 @@ mod test {
 
     #[test]
     fn test_iny_y_register() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for the X register
         cpu.load(vec![0xC8]); // INC X
@@ -2975,7 +3104,8 @@ mod test {
 
     #[test]
     fn test_iny_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the INC instruction for the X register
         cpu.load(vec![0xC8]); // INC X
@@ -2994,7 +3124,8 @@ mod test {
 
     #[test]
     fn test_jmp_absolute() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load memory with JMP absolute instruction (0x4C) and target address $1234
         cpu.load(vec![0x4C, 0x34, 0x12]); // JMP $1234
@@ -3007,7 +3138,8 @@ mod test {
 
     #[test]
     fn test_jmp_indirect() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load memory with JMP indirect instruction (0x6C) and pointer $0120
         cpu.load(vec![0x6C, 0x20, 0x01]); // JMP ($0120)
@@ -3023,7 +3155,8 @@ mod test {
 
     #[test]
     fn test_jmp_indirect_page_boundary_bug() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load memory with JMP indirect instruction (0x6C) and pointer $01FF
         cpu.load(vec![0x6C, 0xFF, 0x01]); // JMP ($01FF)
@@ -3039,7 +3172,8 @@ mod test {
 
     #[test]
     fn test_jsr_jumps_to_subroutine() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load a JSR instruction with target address $1234
         cpu.load(vec![0x20, 0x34, 0x12]); // JSR $1234
@@ -3061,7 +3195,8 @@ mod test {
 
     #[test]
     fn test_jsr_updates_stack_pointer() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load a JSR instruction
         cpu.load(vec![0x20, 0x34, 0x12]); // JSR $1234
@@ -3076,7 +3211,8 @@ mod test {
 
     #[test]
     fn test_ldx_immediate() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDX instruction with Immediate mode and a value to load into X
         cpu.load(vec![0xA2, 0x10]); // LDX #$10
@@ -3095,7 +3231,8 @@ mod test {
 
     #[test]
     fn test_ldx_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDX instruction with Zero Page mode
         cpu.load(vec![0xA6, 0x10]); // LDX $10
@@ -3116,7 +3253,8 @@ mod test {
 
     #[test]
     fn test_ldx_zero_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDX instruction with Immediate mode and a value of 0
         cpu.load(vec![0xA2, 0x00]); // LDX #$00
@@ -3135,7 +3273,8 @@ mod test {
 
     #[test]
     fn test_ldx_negative_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDX instruction with Immediate mode and a value with bit 7 set (negative number)
         cpu.load(vec![0xA2, 0xFF]); // LDX #$FF
@@ -3154,7 +3293,8 @@ mod test {
 
     #[test]
     fn test_ldy_immediate() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDY instruction with Immediate mode and a value to load into Y
         cpu.load(vec![0xA0, 0x10]); // LDY #$10
@@ -3173,7 +3313,8 @@ mod test {
 
     #[test]
     fn test_ldy_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDY instruction with Zero Page mode
         cpu.load(vec![0xA4, 0x10]); // LDY $10
@@ -3194,7 +3335,8 @@ mod test {
 
     #[test]
     fn test_ldy_zero_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDY instruction with Immediate mode and a value of 0
         cpu.load(vec![0xA0, 0x00]); // LDY #$00
@@ -3213,7 +3355,8 @@ mod test {
 
     #[test]
     fn test_ldy_negative_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LDY instruction with Immediate mode and a value with bit 7 set (negative number)
         cpu.load(vec![0xA0, 0xFF]); // LDY #$FF
@@ -3232,7 +3375,8 @@ mod test {
 
     #[test]
     fn test_lsr_accumulator() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LSR instruction for Accumulator mode
         cpu.load(vec![0x4A]); // LSR A
@@ -3255,7 +3399,8 @@ mod test {
 
     #[test]
     fn test_lsr_carry_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LSR instruction for Accumulator mode
         cpu.load(vec![0x4A]); // LSR A
@@ -3278,7 +3423,8 @@ mod test {
 
     #[test]
     fn test_lsr_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LSR instruction for Accumulator mode
         cpu.load(vec![0x4A]); // LSR A
@@ -3301,7 +3447,8 @@ mod test {
 
     #[test]
     fn test_lsr_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the LSR instruction for Zero Page mode
         cpu.load(vec![0x46, 0x10]); // LSR $10
@@ -3325,7 +3472,8 @@ mod test {
 
     #[test]
     fn test_nop() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the NOP instruction (0xEA) into the program memory
         cpu.load(vec![0xEA]); // NOP
@@ -3342,7 +3490,8 @@ mod test {
 
     #[test]
     fn test_nop_multiple() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load multiple NOP instructions into the program memory
         cpu.load(vec![0xEA, 0xEA, 0xEA]); // NOP, NOP, NOP
@@ -3359,7 +3508,8 @@ mod test {
 
     #[test]
     fn test_ora_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the ORA instruction (0x09) with immediate addressing mode
         cpu.load(vec![0x09, 0x00]); // ORA #$00 (A | 0x00)
@@ -3379,7 +3529,8 @@ mod test {
 
     #[test]
     fn test_ora_non_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the ORA instruction (0x09) with immediate addressing mode
         cpu.load(vec![0x09, 0x0F]); // ORA #$0F (A | 0x0F)
@@ -3399,7 +3550,8 @@ mod test {
 
     #[test]
     fn test_ora_zero_flag_clear() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the ORA instruction (0x09) with immediate addressing mode
         cpu.load(vec![0x09, 0x0F]); // ORA #$0F
@@ -3421,7 +3573,8 @@ mod test {
 
     #[test]
     fn test_ora_negative_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the ORA instruction (0x09) with immediate addressing mode
         cpu.load(vec![0x09, 0x80]); // ORA #$80 (A | 0x80)
@@ -3441,7 +3594,8 @@ mod test {
 
     #[test]
     fn test_pha() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the PHA instruction (0x48)
         cpu.load(vec![0x48]); // PHA (Push Accumulator)
@@ -3460,7 +3614,8 @@ mod test {
 
     #[test]
     fn test_php() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the PHP instruction (0x08)
         cpu.load(vec![0x08]); // PHP (Push Processor Status)
@@ -3487,7 +3642,8 @@ mod test {
 
     #[test]
     fn test_pla_pulls_value_from_stack() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the PLA instruction (0x68)
         cpu.load(vec![0x68]); // PLA (Pull Accumulator)
@@ -3507,7 +3663,8 @@ mod test {
 
     #[test]
     fn test_pla_sets_zero_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the PLA instruction (0x68)
         cpu.load(vec![0x68]); // PLA (Pull Accumulator)
@@ -3524,7 +3681,8 @@ mod test {
 
     #[test]
     fn test_pla_sets_negative_flag() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the PLA instruction (0x68)
         cpu.load(vec![0x68]); // PLA (Pull Accumulator)
@@ -3541,7 +3699,8 @@ mod test {
 
     #[test]
     fn test_plp() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load the PLP instruction (0x28)
         cpu.load(vec![0x28]); // PLP (Pull Processor Status)
@@ -3560,7 +3719,8 @@ mod test {
 
     #[test]
     fn test_rol_accumulator_no_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROL instruction for Accumulator mode (0x2A)
         cpu.load(vec![0x2A]); // ROL Accumulator
@@ -3581,7 +3741,8 @@ mod test {
 
     #[test]
     fn test_rol_accumulator_with_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROL instruction for Accumulator mode (0x2A)
         cpu.load(vec![0x2A]); // ROL Accumulator
@@ -3602,7 +3763,8 @@ mod test {
 
     #[test]
     fn test_rol_accumulator_with_existing_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROL instruction for Accumulator mode (0x2A)
         cpu.load(vec![0x2A]); // ROL Accumulator
@@ -3624,7 +3786,8 @@ mod test {
 
     #[test]
     fn test_rol_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROL instruction for Zero Page mode (0x26)
         cpu.load(vec![0x26, 0x10]); // ROL Zero Page address 0x10
@@ -3645,7 +3808,8 @@ mod test {
 
     #[test]
     fn test_rol_zero_page_with_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROL instruction for Zero Page mode (0x26)
         cpu.load(vec![0x26, 0x10]); // ROL Zero Page address 0x10
@@ -3666,7 +3830,8 @@ mod test {
 
     #[test]
     fn test_rol_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROL instruction for Accumulator mode (0x2A)
         cpu.load(vec![0x2A]); // ROL Accumulator
@@ -3687,7 +3852,8 @@ mod test {
 
     #[test]
     fn test_ror_accumulator_no_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROR instruction for Accumulator mode (0x6A)
         cpu.load(vec![0x6A]); // ROR Accumulator
@@ -3708,7 +3874,8 @@ mod test {
 
     #[test]
     fn test_ror_accumulator_with_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROR instruction for Accumulator mode (0x6A)
         cpu.load(vec![0x6A]); // ROR Accumulator
@@ -3730,7 +3897,8 @@ mod test {
 
     #[test]
     fn test_ror_accumulator_with_existing_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROR instruction for Accumulator mode (0x6A)
         cpu.load(vec![0x6A]); // ROR Accumulator
@@ -3752,7 +3920,8 @@ mod test {
 
     #[test]
     fn test_ror_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROR instruction for Zero Page mode (0x66)
         cpu.load(vec![0x66, 0x10]); // ROR Zero Page address 0x10
@@ -3773,7 +3942,8 @@ mod test {
 
     #[test]
     fn test_ror_zero_page_with_carry() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROR instruction for Zero Page mode (0x66)
         cpu.load(vec![0x66, 0x10]); // ROR Zero Page address 0x10
@@ -3795,7 +3965,8 @@ mod test {
 
     #[test]
     fn test_ror_accumulator_zero_flag_set() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load ROR instruction for Accumulator mode (0x6A)
         cpu.load(vec![0x6A]); // ROR Accumulator
@@ -3816,7 +3987,8 @@ mod test {
 
     #[test]
     fn test_rti() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Execute RTI instruction
         cpu.load(vec![0x40]); // Load RTI opcode
@@ -3849,7 +4021,8 @@ mod test {
 
     #[test]
     fn test_rts() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Execute RTS instruction
         cpu.load(vec![0x60]); // Load RTS opcode
@@ -3869,7 +4042,8 @@ mod test {
 
     #[test]
     fn test_sbc_no_borrow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // SBC #$10 (immediate mode, subtract 0x10)
         cpu.load(vec![0xE9, 0x10]); // SBC #$10
@@ -3893,7 +4067,8 @@ mod test {
 
     #[test]
     fn test_sbc_with_borrow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // SBC #$10 (immediate mode, subtract 0x10)
         cpu.load(vec![0xE9, 0x10]); // SBC #$10
@@ -3917,7 +4092,8 @@ mod test {
 
     #[test]
     fn test_sbc_with_zero_result() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // SBC #$10 (immediate mode, subtract 0x10)
         cpu.load(vec![0xE9, 0x10]); // SBC #$10
@@ -3941,7 +4117,8 @@ mod test {
 
     #[test]
     fn test_sbc_with_overflow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // SBC #$80 (immediate mode, subtract 0x80)
         cpu.load(vec![0xE9, 0x80]); // SBC #$80
@@ -3965,7 +4142,8 @@ mod test {
 
     #[test]
     fn test_sbc_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // SBC $10 (Zero Page mode)
         cpu.load(vec![0xE5, 0x10]); // SBC Zero Page address 0x10
@@ -3991,7 +4169,8 @@ mod test {
 
     #[test]
     fn test_sbc_zero_page_with_borrow() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // SBC $10 (Zero Page mode)
         cpu.load(vec![0xE5, 0x10]); // SBC Zero Page address 0x10
@@ -4017,7 +4196,8 @@ mod test {
 
     #[test]
     fn test_sec() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load SEC instruction (0x38)
         cpu.load(vec![0x38]); // SEC
@@ -4030,7 +4210,8 @@ mod test {
 
     #[test]
     fn test_sed() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load SED instruction (0xF8)
         cpu.load(vec![0xF8]); // SED
@@ -4043,7 +4224,8 @@ mod test {
 
     #[test]
     fn test_sei_instruction() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load SEI instruction (0x78)
         cpu.load(vec![0x78]); // SEI
@@ -4056,7 +4238,8 @@ mod test {
 
     #[test]
     fn test_sta_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STA instruction for Zero Page mode (0x85)
         cpu.load(vec![0x85, 0x10]); // STA $10 (store A register at memory address 0x10)
@@ -4070,7 +4253,8 @@ mod test {
 
     #[test]
     fn test_sta_absolute() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STA instruction for Absolute mode (0x8D)
         cpu.load(vec![0x8D, 0x00, 0x12]); // STA $2000 (store A register at memory address 0x2000)
@@ -4084,7 +4268,8 @@ mod test {
 
     #[test]
     fn test_stx_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STX instruction for Zero Page mode (0x86)
         cpu.load(vec![0x86, 0x10]); // STX $10 (store X register at memory address 0x10)
@@ -4098,7 +4283,8 @@ mod test {
 
     #[test]
     fn test_stx_zero_page_y() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STX instruction for Zero Page,Y mode (0x96)
         cpu.load(vec![0x96, 0x10]); // STX $10,Y (store X register at memory address 0x10 + Y)
@@ -4113,7 +4299,8 @@ mod test {
 
     #[test]
     fn test_stx_absolute() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STX instruction for Absolute mode (0x8E)
         cpu.load(vec![0x8E, 0x00, 0x12]); // STX $2000 (store X register at memory address 0x2000)
@@ -4127,7 +4314,8 @@ mod test {
 
     #[test]
     fn test_sty_zero_page() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STY instruction for Zero Page mode (0x84)
         cpu.load(vec![0x84, 0x10]); // STY $10 (store Y register at memory address 0x10)
@@ -4141,7 +4329,8 @@ mod test {
 
     #[test]
     fn test_sty_zero_page_x() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STY instruction for Zero Page,X mode (0x94)
         cpu.load(vec![0x94, 0x10]); // STY $10,X (store Y register at memory address 0x10 + X)
@@ -4156,7 +4345,8 @@ mod test {
 
     #[test]
     fn test_sty_absolute() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load STY instruction for Absolute mode (0x8C)
         cpu.load(vec![0x8C, 0x00, 0x12]); // STY $2000 (store Y register at memory address 0x2000)
@@ -4170,7 +4360,8 @@ mod test {
 
     #[test]
     fn test_tay() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load TAY instruction (0xA8)
         cpu.load(vec![0xA8]); // TAY
@@ -4184,7 +4375,8 @@ mod test {
 
     #[test]
     fn test_tsx() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load TSX instruction (0xBA)
         cpu.load(vec![0xBA]); // TSX
@@ -4198,7 +4390,8 @@ mod test {
 
     #[test]
     fn test_txa() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load TXA instruction (0x8A)
         cpu.load(vec![0x8A]); // TXA
@@ -4212,7 +4405,8 @@ mod test {
 
     #[test]
     fn test_txs() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load TXS instruction (0x9A)
         cpu.load(vec![0x9A]); // TXS
@@ -4226,7 +4420,8 @@ mod test {
 
     #[test]
     fn test_tya() {
-        let mut cpu = CPU::new();
+        let rom = rom_init();
+        let mut cpu = CPU::new(rom);
 
         // Load TYA instruction (0x98)
         cpu.load(vec![0x98]); // TYA

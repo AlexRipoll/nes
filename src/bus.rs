@@ -1,5 +1,7 @@
 use std::usize;
 
+use crate::cartridge::Rom;
+
 // Represents the start address of the RAM region in the memory map.
 const RAM_START_ADDRESS: u16 = 0x0000;
 // Represents the end address of the mirrored RAM region in the memory map.
@@ -12,12 +14,14 @@ const PPU_REGISTERS_MIRRORS_END_ADDRESS: u16 = 0x3FFF;
 #[derive(Debug)]
 pub struct Bus {
     cpu_vram: [u8; 2048],
+    rom: Rom,
 }
 
 impl Bus {
-    pub fn new() -> Self {
+    pub fn new(rom: Rom) -> Self {
         Bus {
             cpu_vram: [0; 2048],
+            rom,
         }
     }
 
@@ -73,25 +77,56 @@ impl Bus {
 
 #[cfg(test)]
 mod test {
-    use crate::bus::Bus;
+    use crate::{
+        bus::Bus,
+        cartridge::{Rom, CHR_ROM_8KB_UNITS, PRG_ROM_16KB_UNITS},
+    };
+
+    fn rom_init() -> Rom {
+        let mut raw_rom_data = vec![
+            0x4E,
+            0x45,
+            0x53,
+            0x1A,        // iNES header
+            0x01,        // 1 unit of 16KB PRG ROM
+            0x01,        // 1 unit of 8KB CHR ROM
+            0b0000_0001, // Mirroring = Vertical, no trainer
+            0b0000_0000, // Mapper info
+            0x00,
+            0x00,
+            0x00,
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+            0x00, // Padding (not used for these tests)
+        ];
+        raw_rom_data.extend(vec![0xFF; PRG_ROM_16KB_UNITS]); // 16KB PRG ROM filled with 0xFF
+        raw_rom_data.extend(vec![0xFF; CHR_ROM_8KB_UNITS]); // 8KB CHR ROM filled with 0xFF
+
+        Rom::new(raw_rom_data).unwrap()
+    }
 
     #[test]
     fn test_mem_read() {
-        let mut bus = Bus::new();
+        let rom = rom_init();
+        let mut bus = Bus::new(rom);
         bus.cpu_vram[0x12] = 100;
         assert_eq!(bus.mem_read(0x12), 100);
     }
 
     #[test]
     fn test_mem_write() {
-        let mut bus = Bus::new();
+        let rom = rom_init();
+        let mut bus = Bus::new(rom);
         bus.mem_write(0x12, 100);
         assert_eq!(bus.cpu_vram[0x12], 100);
     }
 
     #[test]
     fn test_mem_read_u16() {
-        let mut bus = Bus::new();
+        let rom = rom_init();
+        let mut bus = Bus::new(rom);
         bus.cpu_vram[0xab] = 0x10;
         bus.cpu_vram[0xac] = 0x11;
         assert_eq!(bus.mem_read_u16(0xab), 0x1110);
@@ -99,7 +134,8 @@ mod test {
 
     #[test]
     fn test_mem_write_u16() {
-        let mut bus = Bus::new();
+        let rom = rom_init();
+        let mut bus = Bus::new(rom);
         bus.mem_write_u16(0xab, 0x10ab);
         assert_eq!(bus.cpu_vram[0xab], 0xab);
         assert_eq!(bus.cpu_vram[0xac], 0x10);

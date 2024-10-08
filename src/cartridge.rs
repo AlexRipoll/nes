@@ -1,8 +1,8 @@
 use std::usize;
 
 const INES_MAGIC_NUMBER: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A]; //  corresponds to the string NES^Z
-const PRG_ROM_16KB_UNITS: usize = 16_384;
-const CHR_ROM_8KB_UNITS: usize = 8_192;
+pub const PRG_ROM_16KB_UNITS: usize = 16_384;
+pub const CHR_ROM_8KB_UNITS: usize = 8_192;
 const HEADER_SIZE: usize = 16;
 const TRAINER_SIZE: usize = 512;
 
