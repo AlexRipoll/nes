@@ -13,14 +13,14 @@ pub struct Instruction {
     /// This is a unique byte (0x00 to 0xFF) that corresponds to a specific
     /// operation the CPU will perform. The opcode is used to look up the
     /// associated mnemonic and addressing mode.
-    opcode: u8,
+    pub opcode: u8,
 
     /// The human-readable name of the instruction.
     ///
     /// This field represents the mnemonic of the instruction (e.g., `LDA`, `STA`,
     /// `ADC`, etc.) and provides a way to identify the instruction in a more
     /// meaningful way than just the opcode.
-    mnemonic: Mnemonic,
+    pub mnemonic: Mnemonic,
 
     /// The mode used to access operands for the instruction.
     ///
@@ -53,7 +53,7 @@ pub struct Instruction {
 /// Mnemonics include operations like arithmetic, bit manipulation, branching,
 /// and control instructions.
 #[derive(Debug)]
-enum Mnemonic {
+pub enum Mnemonic {
     ADC,
     AND,
     ASL,
