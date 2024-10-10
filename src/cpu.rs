@@ -6,6 +6,8 @@ use crate::{
 };
 
 const INIT_STATUS: u8 = 0b0010_0100;
+const INIT_STACK_PTR_ADDRESS: u8 = 0xFD;
+const INIT_PC_ADDRESS: u16 = 0xFFFC;
 
 /// Represents the status flags of the 6502 CPU, stored in a single byte.
 /// Each bit of the byte is mapped to a specific flag, represented in binary:
@@ -204,12 +206,10 @@ impl CPU {
     pub fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
-        self.stack_ptr = 0xFD;
-        self.status = 0b0010_0100;
+        self.stack_ptr = INIT_STACK_PTR_ADDRESS;
+        self.status = INIT_STATUS;
 
-        // FIX:
-        // self.program_counter = self.mem_read_u16(0xFFFC);
-        self.program_counter = 0x0600;
+        self.program_counter = self.mem_read_u16(INIT_PC_ADDRESS);
     }
 
     /// Runs a program, loading it into memory and resetting the CPU.
@@ -421,7 +421,8 @@ impl CPU {
                     // self.brk();
                     return;
                 }
-                _ => panic!("Opcode not supported {:X}", opcode),
+                // _ => panic!("Opcode not supported {:X}", opcode),
+                _ => eprintln!("Unofficial opcode not implemented yet"),
             }
         }
     }
