@@ -83,7 +83,7 @@ impl Bus {
     }
 
     fn prg_rom_read(&self, mut address: u16) -> u8 {
-        address -= 8000;
+        address -= 0x8000;
         // 0x4000 == 16_384 (PRG_ROM_16KB_UNITS)
         if self.rom.prg_rom.len() == 0x4000 && address >= 0x4000 {
             // get mirrored data
