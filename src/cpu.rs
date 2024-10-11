@@ -1096,6 +1096,8 @@ impl CPU {
     fn plp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.status = self.stack_pop();
+        self.clear_flag(StatusFlag::Break);
+        self.set_flag(StatusFlag::Unused);
 
         self.update_program_counter(&instruction);
     }
