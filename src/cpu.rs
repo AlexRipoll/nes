@@ -148,7 +148,6 @@ impl CPU {
         // Stack is located from 0x0100 to 0x01FF, so add 0x100 to SP to get the address
         let stack_address = 0x0100 + self.stack_ptr as u16;
         self.mem_write(stack_address, data);
-
         self.stack_ptr = self.stack_ptr.wrapping_sub(1);
     }
 
@@ -1070,7 +1069,9 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation.
     fn php(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        self.stack_push(self.status);
+        // https://www.nesdev.org/wiki/Status_flags#The_B_flag
+        let status = self.status | StatusFlag::Break.to_mask();
+        self.stack_push(status);
 
         self.update_program_counter(&instruction);
     }
@@ -3772,8 +3773,6 @@ mod test {
             | StatusFlag::Interrupt as u8
             | StatusFlag::Unused as u8;
 
-        println!("{:08b}", expected_status);
-        println!("{:08b}", pushed_status);
         // Assert the pushed status includes all set flags plus the Break flag
         assert_eq!(pushed_status, expected_status);
 
