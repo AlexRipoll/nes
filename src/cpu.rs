@@ -1173,6 +1173,8 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         self.status = self.stack_pop();
         self.program_counter = self.stack_pop_u16();
+        self.clear_flag(StatusFlag::Break);
+        self.set_flag(StatusFlag::Unused);
 
         self.update_program_counter(&instruction);
     }
@@ -1343,9 +1345,9 @@ impl CPU {
     fn txs(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
         self.stack_ptr = self.register_x;
-        self.set_zero_and_negative_flags(self.stack_ptr);
+        // self.set_zero_and_negative_flags(self.stack_ptr);
 
-        self.update_program_counter(&instruction);
+        // self.update_program_counter(&instruction);
     }
 
     /// TYA (Transfer Y Register to Accumulator) - Transfers the value of the Y register to the accumulator (A).
@@ -1389,8 +1391,8 @@ mod test {
             0x00, // Padding (not used for these tests)
             0x00, // Padding (not used for these tests)
         ];
-        raw_rom_data.extend(vec![0xFF; 2 * PRG_ROM_16KB_UNITS]); // 16KB PRG ROM filled with 0xFF
-        raw_rom_data.extend(vec![0xFF; CHR_ROM_8KB_UNITS]); // 8KB CHR ROM filled with 0xFF
+        raw_rom_data.extend(vec![0xAA; 2 * PRG_ROM_16KB_UNITS]); // 16KB PRG ROM filled with 0xFF
+        raw_rom_data.extend(vec![0xBB; CHR_ROM_8KB_UNITS]); // 8KB CHR ROM filled with 0xFF
 
         Rom::new(raw_rom_data).unwrap()
     }
@@ -4414,7 +4416,7 @@ mod test {
         let mut cpu = CPU::new(bus);
 
         // Load STA instruction for Zero Page mode (0x85)
-        cpu.load(vec![0x85, 0x10]); // STA $10 (store A register at memory address 0x10)
+        cpu.load(vec![0x85, 0x10, 0x00]); // STA $10 (store A register at memory address 0x10)
         cpu.reset();
         cpu.register_a = 0x42; // Set A register to 0x42
         cpu.execute_program();
@@ -4576,8 +4578,9 @@ mod test {
         let mut cpu = CPU::new(bus);
 
         // Load TXA instruction (0x8A)
-        cpu.load(vec![0x8A]); // TXA
+        cpu.load(vec![0x8A, 0x00]); // TXA
         cpu.reset();
+        cpu.program_counter = 0x0600;
         cpu.register_x = 0x55; // Set X register to 0x55
         cpu.execute_program();
 
