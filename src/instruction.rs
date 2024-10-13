@@ -113,9 +113,10 @@ pub enum Mnemonic {
     TXA,
     TXS,
     TYA,
-    UNP,
+    UNOP,
     LAX,
     SAX,
+    USBC,
     UNKOWN,
 }
 
@@ -178,9 +179,10 @@ impl fmt::Display for Mnemonic {
             Mnemonic::TXA => "TXA",
             Mnemonic::TXS => "TXS",
             Mnemonic::TYA => "TYA",
-            Mnemonic::UNP => "*NOP",
+            Mnemonic::UNOP => "*NOP",
             Mnemonic::LAX => "*LAX",
             Mnemonic::SAX => "*SAX",
+            Mnemonic::USBC => "*SBC",
             Mnemonic::UNKOWN => "UNKNOWN",
         };
 
@@ -1553,7 +1555,7 @@ impl From<u8> for Instruction {
             // Unofficial opcodes
             0x04 | 0x44 | 0x64 => Instruction {
                 opcode,
-                mnemonic: Mnemonic::UNP,
+                mnemonic: Mnemonic::UNOP,
                 mode: AddressingMode::ZeroPage,
                 none_addressing: false,
                 size: 2,
@@ -1561,7 +1563,7 @@ impl From<u8> for Instruction {
             },
             0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => Instruction {
                 opcode,
-                mnemonic: Mnemonic::UNP,
+                mnemonic: Mnemonic::UNOP,
                 mode: AddressingMode::ZeroPage_X,
                 none_addressing: false,
                 size: 2,
@@ -1569,7 +1571,7 @@ impl From<u8> for Instruction {
             },
             0x0C => Instruction {
                 opcode,
-                mnemonic: Mnemonic::UNP,
+                mnemonic: Mnemonic::UNOP,
                 mode: AddressingMode::Absolute,
                 none_addressing: false,
                 size: 3,
@@ -1577,7 +1579,7 @@ impl From<u8> for Instruction {
             },
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => Instruction {
                 opcode,
-                mnemonic: Mnemonic::UNP,
+                mnemonic: Mnemonic::UNOP,
                 mode: AddressingMode::Absolute_X,
                 none_addressing: false,
                 size: 3,
@@ -1587,7 +1589,7 @@ impl From<u8> for Instruction {
             0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => {
                 Instruction {
                     opcode,
-                    mnemonic: Mnemonic::UNP,
+                    mnemonic: Mnemonic::UNOP,
                     mode: AddressingMode::Implied,
                     none_addressing: false,
                     size: 1,
@@ -1596,7 +1598,7 @@ impl From<u8> for Instruction {
             }
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => Instruction {
                 opcode,
-                mnemonic: Mnemonic::UNP,
+                mnemonic: Mnemonic::UNOP,
                 mode: AddressingMode::Implied,
                 none_addressing: false,
                 size: 1,
@@ -1604,7 +1606,7 @@ impl From<u8> for Instruction {
             },
             0x80 | 0x82 | 0x89 | 0xc2 | 0xe2 => Instruction {
                 opcode,
-                mnemonic: Mnemonic::UNP,
+                mnemonic: Mnemonic::UNOP,
                 mode: AddressingMode::Immediate,
                 none_addressing: false,
                 size: 2,
@@ -1691,6 +1693,14 @@ impl From<u8> for Instruction {
                 none_addressing: false,
                 size: 2,
                 cycles: 6,
+            },
+            0xEB => Instruction {
+                opcode,
+                mnemonic: Mnemonic::USBC,
+                mode: AddressingMode::Immediate,
+                none_addressing: false,
+                size: 2,
+                cycles: 2,
             },
 
             _ => Instruction {

@@ -448,6 +448,10 @@ impl CPU {
                 0x87 | 0x97 | 0x8f | 0x83 => {
                     self.sax(opcode);
                 }
+                /* unofficial SBC */
+                0xEB => {
+                    self.sbc(opcode);
+                }
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
             }
