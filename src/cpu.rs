@@ -420,8 +420,36 @@ impl CPU {
                     // self.brk();
                     return;
                 }
+                // Unofficial opcodes
+                /* NOPs */
+                0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2
+                | 0xF2 => {
+                    self.nop(opcode);
+                }
+                0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => {
+                    self.nop(opcode);
+                }
+                /* NOP read */
+                0x04 | 0x44 | 0x64 | 0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 | 0x0C | 0x1C
+                | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+                    self.nop_read(opcode);
+                    /* do nothing */
+                }
+                // SKB
+                0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => {
+                    /* 2 byte NOP (immediate ) */
+                    self.nop(opcode);
+                }
+                // LAX
+                0xA7 | 0xB7 | 0xAF | 0xBF | 0xA3 | 0xB3 => {
+                    self.lax(opcode);
+                }
+                /* SAX */
+                0x87 | 0x97 | 0x8f | 0x83 => {
+                    self.sax(opcode);
+                }
                 // _ => panic!("Opcode not supported {:X}", opcode),
-                _ => eprintln!("Unofficial opcode not implemented yet"),
+                _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
             }
         }
     }
@@ -1359,6 +1387,37 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         self.register_a = self.register_y;
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn nop_read(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let addr = self.operand_address(&instruction.mode);
+        let data = self.mem_read(addr);
+        /* do nothing */
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn lax(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let addr = self.operand_address(&instruction.mode);
+        let data = self.mem_read(addr);
+
+        self.register_a = data;
+        self.set_zero_and_negative_flags(self.register_a);
+        self.register_x = self.register_a;
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn sax(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let addr = self.operand_address(&instruction.mode);
+
+        let data = self.register_a & self.register_x;
+        self.mem_write(addr, data);
 
         self.update_program_counter(&instruction);
     }

@@ -16,27 +16,27 @@ mod instruction;
 mod trace;
 
 fn main() -> Result<(), String> {
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
-
-    let window = video_subsystem
-        .window("Snake game", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
-        .position_centered()
-        .resizable()
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
-
-    let mut event_pump = sdl_context.event_pump()?;
-
-    let creator = canvas.texture_creator();
-    let mut texture = creator
-        .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
-        .unwrap();
-
-    let mut screen_state = [0 as u8; 32 * 3 * 32];
-    let mut rng = rand::thread_rng();
+    // let sdl_context = sdl2::init()?;
+    // let video_subsystem = sdl_context.video()?;
+    //
+    // let window = video_subsystem
+    //     .window("Snake game", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
+    //     .position_centered()
+    //     .resizable()
+    //     .build()
+    //     .map_err(|e| e.to_string())?;
+    //
+    // let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    //
+    // let mut event_pump = sdl_context.event_pump()?;
+    //
+    // let creator = canvas.texture_creator();
+    // let mut texture = creator
+    //     .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
+    //     .unwrap();
+    //
+    // let mut screen_state = [0 as u8; 32 * 3 * 32];
+    // let mut rng = rand::thread_rng();
 
     let rom_dump = fs::read("nestest.nes").unwrap();
     let rom = Rom::new(rom_dump).unwrap();

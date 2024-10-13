@@ -72,8 +72,8 @@ pub fn trace(cpu: &CPU) -> String {
 
             let address = cpu.mem_read_u16(begin + 1);
 
-            match instruction.mode {
-                AddressingMode::Indirect => {
+            if instruction.none_addressing {
+                if instruction.opcode == 0x6c {
                     //jmp indirect
                     let jmp_addr = if address & 0x00FF == 0x00FF {
                         let lo = cpu.mem_read(address);
@@ -85,23 +85,43 @@ pub fn trace(cpu: &CPU) -> String {
 
                     // let jmp_addr = cpu.mem_read_u16(address);
                     format!("(${:04x}) = {:04x}", address, jmp_addr)
+                } else {
+                    format!("${:04x}", mem_address)
                 }
-                // AddressingMode::Indirect => {
-                //     format!("${:04x}", address)
-                // }
-                AddressingMode::Absolute => format!("${:04x} = {:02x}", mem_address, stored_value),
-                AddressingMode::Absolute_X => format!(
-                    "${:04x},X @ {:04x} = {:02x}",
-                    address, mem_address, stored_value
-                ),
-                AddressingMode::Absolute_Y => format!(
-                    "${:04x},Y @ {:04x} = {:02x}",
-                    address, mem_address, stored_value
-                ),
-                _ => panic!(
-                    "unexpected addressing mode {:?} has ops-len 3. code {:02x}",
-                    instruction.mode, instruction.opcode
-                ),
+            } else {
+                match instruction.mode {
+                    AddressingMode::Indirect => {
+                        //jmp indirect
+                        let jmp_addr = if address & 0x00FF == 0x00FF {
+                            let lo = cpu.mem_read(address);
+                            let hi = cpu.mem_read(address & 0xFF00);
+                            (hi as u16) << 8 | (lo as u16)
+                        } else {
+                            cpu.mem_read_u16(address)
+                        };
+
+                        // let jmp_addr = cpu.mem_read_u16(address);
+                        format!("(${:04x}) = {:04x}", address, jmp_addr)
+                    }
+                    // AddressingMode::Indirect => {
+                    //     format!("${:04x}", address)
+                    // }
+                    AddressingMode::Absolute => {
+                        format!("${:04x} = {:02x}", mem_address, stored_value)
+                    }
+                    AddressingMode::Absolute_X => format!(
+                        "${:04x},X @ {:04x} = {:02x}",
+                        address, mem_address, stored_value
+                    ),
+                    AddressingMode::Absolute_Y => format!(
+                        "${:04x},Y @ {:04x} = {:02x}",
+                        address, mem_address, stored_value
+                    ),
+                    _ => panic!(
+                        "unexpected addressing mode {:?} has ops-len 3. code {:02x}",
+                        instruction.mode, instruction.opcode
+                    ),
+                }
             }
         }
 
@@ -115,8 +135,11 @@ pub fn trace(cpu: &CPU) -> String {
         .join(" ");
 
     let asm_str = format!(
-        "{:04x}  {:8}  {: >4?} {}",
-        begin, hex_str, instruction.mnemonic, tmp
+        "{:04x}  {:8} {: >4} {}",
+        begin,
+        hex_str,
+        instruction.mnemonic.to_string(),
+        tmp
     )
     .trim()
     .to_string();
