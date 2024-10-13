@@ -452,6 +452,10 @@ impl CPU {
                 0xEB => {
                     self.sbc(opcode);
                 }
+                // DCP
+                0xc7 | 0xd7 | 0xCF | 0xdF | 0xdb | 0xd3 | 0xc3 => {
+                    self.dcp(opcode);
+                }
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
             }
@@ -1422,6 +1426,23 @@ impl CPU {
 
         let data = self.register_a & self.register_x;
         self.mem_write(addr, data);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn dcp(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let addr = self.operand_address(&instruction.mode);
+
+        let mut data = self.mem_read(addr);
+        data = data.wrapping_sub(1);
+        self.mem_write(addr, data);
+
+        if data <= self.register_a {
+            self.set_flag(StatusFlag::Carry);
+        }
+
+        self.set_zero_and_negative_flags(self.register_a.wrapping_sub(data));
 
         self.update_program_counter(&instruction);
     }

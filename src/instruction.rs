@@ -118,6 +118,7 @@ pub enum Mnemonic {
     SAX,
     USBC,
     UNKOWN,
+    DCP,
 }
 
 impl fmt::Display for Mnemonic {
@@ -183,6 +184,7 @@ impl fmt::Display for Mnemonic {
             Mnemonic::LAX => "*LAX",
             Mnemonic::SAX => "*SAX",
             Mnemonic::USBC => "*SBC",
+            Mnemonic::DCP => "*DCP",
             Mnemonic::UNKOWN => "UNKNOWN",
         };
 
@@ -1701,6 +1703,63 @@ impl From<u8> for Instruction {
                 none_addressing: false,
                 size: 2,
                 cycles: 2,
+            },
+            // DCP
+            0xC7 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::ZeroPage,
+                none_addressing: false,
+                size: 2,
+                cycles: 5,
+            },
+            0xD7 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::ZeroPage_X,
+                none_addressing: false,
+                size: 2,
+                cycles: 6,
+            },
+            0xCF => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::Absolute,
+                none_addressing: false,
+                size: 3,
+                cycles: 6,
+            },
+            0xDF => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::Absolute_X,
+                none_addressing: false,
+                size: 3,
+                cycles: 7,
+            },
+            0xDB => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::Absolute_Y,
+                none_addressing: false,
+                size: 3,
+                cycles: 7,
+            },
+            0xD3 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::Indirect_Y,
+                none_addressing: false,
+                size: 2,
+                cycles: 8,
+            },
+            0xC3 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::DCP,
+                mode: AddressingMode::Indirect_X,
+                none_addressing: false,
+                size: 2,
+                cycles: 8,
             },
 
             _ => Instruction {
