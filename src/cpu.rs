@@ -456,6 +456,10 @@ impl CPU {
                 0xc7 | 0xd7 | 0xCF | 0xdF | 0xdb | 0xd3 | 0xc3 => {
                     self.dcp(opcode);
                 }
+                // ISB
+                0xe7 | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3 => {
+                    self.isb(opcode);
+                }
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
             }
@@ -927,7 +931,7 @@ impl CPU {
     /// **Flags affected**:
     /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
     /// - **Negative (N)**: Set if the result has its most significant bit set.
-    fn inc(&mut self, opcode: u8) {
+    fn inc(&mut self, opcode: u8) -> u8 {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
@@ -938,6 +942,8 @@ impl CPU {
         self.set_zero_and_negative_flags(res);
 
         self.update_program_counter(&instruction);
+
+        res
     }
 
     /// INX (Increment X Register) - Increments the X register by one.
@@ -1238,6 +1244,12 @@ impl CPU {
         let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
+        self.reg_a_complemtent_sub(operand);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn reg_a_complemtent_sub(&mut self, operand: u8) {
         // Perform the two's complement subtraction:
         // A = A - M - (1 - Carry) ==> A = A + (~M) + C
         let inverted_operand = operand ^ 0xFF; // Inverting operand for subtraction (Two's complement)
@@ -1264,8 +1276,6 @@ impl CPU {
 
         // Set Negative flag (if the MSB of the result is set)
         self.set_flag_conditionally(StatusFlag::Negative, self.register_a & 0x80 != 0);
-
-        self.update_program_counter(&instruction);
     }
 
     /// SEC (Set Carry Flag) - Sets the Carry flag.
@@ -1443,6 +1453,14 @@ impl CPU {
         }
 
         self.set_zero_and_negative_flags(self.register_a.wrapping_sub(data));
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn isb(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let data = self.inc(opcode);
+        self.reg_a_complemtent_sub(data);
 
         self.update_program_counter(&instruction);
     }
