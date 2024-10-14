@@ -468,6 +468,10 @@ impl CPU {
                 0x27 | 0x37 | 0x2F | 0x3F | 0x3B | 0x33 | 0x23 => {
                     self.rla(opcode);
                 }
+                // SRE
+                0x47 | 0x57 | 0x4F | 0x5f | 0x5b | 0x43 | 0x53 => {
+                    self.sre(opcode);
+                }
 
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
@@ -1064,14 +1068,16 @@ impl CPU {
     /// - **Carry (C)**: Set if bit 0 of the operand was set before the shift.
     /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
     /// - **Negative (N)**: Always cleared after an LSR operation (as the result will always be positive).
-    fn lsr(&mut self, opcode: u8) {
+    fn lsr(&mut self, opcode: u8) -> u8 {
         let instruction = Instruction::from(opcode);
+        let data: u8;
         match instruction.mode {
             AddressingMode::Accumulator => {
                 self.set_flag_conditionally(StatusFlag::Carry, self.register_a & 0b0000_0001 != 0);
 
                 self.register_a = self.register_a >> 1;
                 self.set_zero_and_negative_flags(self.register_a);
+                data = self.register_a;
             }
             _ => {
                 let address = self.operand_address(&instruction.mode);
@@ -1082,10 +1088,13 @@ impl CPU {
                 let res = operand >> 1;
                 self.mem_write(address, res);
                 self.set_zero_and_negative_flags(res);
+                data = res;
             }
         }
 
         self.update_program_counter(&instruction);
+
+        data
     }
 
     /// NOP (No Operation) - Does nothing for one clock cycle.
@@ -1499,6 +1508,15 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let data = self.rol(opcode);
         self.register_a &= data;
+        self.set_zero_and_negative_flags(self.register_a);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn sre(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let data = self.lsr(opcode);
+        self.register_a ^= data;
         self.set_zero_and_negative_flags(self.register_a);
 
         self.update_program_counter(&instruction);
