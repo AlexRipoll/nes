@@ -22,108 +22,28 @@ pub fn trace(cpu: &CPU) -> String {
     let tmp = match instruction.size {
         1 => match instruction.opcode {
             0x0a | 0x4a | 0x2a | 0x6a => format!("A "),
-            _ => String::from(""),
+            _ => String::new(),
         },
         2 => {
-            let address: u8 = cpu.mem_read(begin + 1);
+            let address = cpu.mem_read(begin + 1);
             hex_dump.push(address);
-
-            match instruction.mode {
-                AddressingMode::Immediate => format!("#${:02x}", address),
-                AddressingMode::ZeroPage => format!("${:02x} = {:02x}", mem_address, stored_value),
-                AddressingMode::ZeroPage_X => format!(
-                    "${:02x},X @ {:02x} = {:02x}",
-                    address, mem_address, stored_value
-                ),
-                AddressingMode::ZeroPage_Y => format!(
-                    "${:02x},Y @ {:02x} = {:02x}",
-                    address, mem_address, stored_value
-                ),
-                AddressingMode::Relative => {
-                    let address: usize =
-                        (begin as usize + 2).wrapping_add((address as i8) as usize);
-                    format!("${:04x}", address)
-                }
-                AddressingMode::Indirect_X => format!(
-                    "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
-                    address,
-                    (address.wrapping_add(cpu.register_x)),
-                    mem_address,
-                    stored_value
-                ),
-                AddressingMode::Indirect_Y => format!(
-                    "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
-                    address,
-                    (mem_address.wrapping_sub(cpu.register_y as u16)),
-                    mem_address,
-                    stored_value
-                ),
-                _ => panic!(
-                    "unexpected addressing mode {:?} has instruction size 2. code {:02x}",
-                    instruction.mode, instruction.opcode
-                ),
-            }
+            format_two_byte_instruction(
+                cpu,
+                instruction.mode,
+                address,
+                mem_address,
+                stored_value,
+                begin,
+            )
         }
-        3 => {
-            let address_lsb = cpu.mem_read(begin + 1);
-            let address_msb = cpu.mem_read(begin + 2);
-            hex_dump.push(address_lsb);
-            hex_dump.push(address_msb);
-
-            let address = cpu.mem_read_u16(begin + 1);
-
-            if instruction.none_addressing {
-                if instruction.opcode == 0x6c {
-                    //jmp indirect
-                    let jmp_addr = if address & 0x00FF == 0x00FF {
-                        let lo = cpu.mem_read(address);
-                        let hi = cpu.mem_read(address & 0xFF00);
-                        (hi as u16) << 8 | (lo as u16)
-                    } else {
-                        cpu.mem_read_u16(address)
-                    };
-
-                    // let jmp_addr = cpu.mem_read_u16(address);
-                    format!("(${:04x}) = {:04x}", address, jmp_addr)
-                } else {
-                    format!("${:04x}", mem_address)
-                }
-            } else {
-                match instruction.mode {
-                    AddressingMode::Indirect => {
-                        //jmp indirect
-                        let jmp_addr = if address & 0x00FF == 0x00FF {
-                            let lo = cpu.mem_read(address);
-                            let hi = cpu.mem_read(address & 0xFF00);
-                            (hi as u16) << 8 | (lo as u16)
-                        } else {
-                            cpu.mem_read_u16(address)
-                        };
-
-                        // let jmp_addr = cpu.mem_read_u16(address);
-                        format!("(${:04x}) = {:04x}", address, jmp_addr)
-                    }
-                    // AddressingMode::Indirect => {
-                    //     format!("${:04x}", address)
-                    // }
-                    AddressingMode::Absolute => {
-                        format!("${:04x} = {:02x}", mem_address, stored_value)
-                    }
-                    AddressingMode::Absolute_X => format!(
-                        "${:04x},X @ {:04x} = {:02x}",
-                        address, mem_address, stored_value
-                    ),
-                    AddressingMode::Absolute_Y => format!(
-                        "${:04x},Y @ {:04x} = {:02x}",
-                        address, mem_address, stored_value
-                    ),
-                    _ => panic!(
-                        "unexpected addressing mode {:?} has ops-len 3. code {:02x}",
-                        instruction.mode, instruction.opcode
-                    ),
-                }
-            }
-        }
+        3 => format_three_byte_instruction(
+            cpu,
+            begin,
+            &mut hex_dump,
+            &instruction,
+            mem_address,
+            stored_value,
+        ),
 
         _ => "".to_string(),
     };
@@ -149,6 +69,114 @@ pub fn trace(cpu: &CPU) -> String {
         asm_str, cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.stack_ptr,
     )
     .to_ascii_uppercase()
+}
+
+fn format_two_byte_instruction(
+    cpu: &CPU,
+    mode: AddressingMode,
+    address: u8,
+    mem_address: u16,
+    stored_value: u8,
+    begin: u16,
+) -> String {
+    match mode {
+        AddressingMode::Immediate => format!("#${:02x}", address),
+        AddressingMode::ZeroPage => format!("${:02x} = {:02x}", mem_address, stored_value),
+        AddressingMode::ZeroPage_X => format!(
+            "${:02x},X @ {:02x} = {:02x}",
+            address, mem_address, stored_value
+        ),
+        AddressingMode::ZeroPage_Y => format!(
+            "${:02x},Y @ {:02x} = {:02x}",
+            address, mem_address, stored_value
+        ),
+        AddressingMode::Relative => {
+            let target_address = (begin as usize + 2).wrapping_add(address as i8 as usize);
+            format!("${:04x}", target_address)
+        }
+        AddressingMode::Indirect_X => format!(
+            "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
+            address,
+            (address.wrapping_add(cpu.register_x)),
+            mem_address,
+            stored_value
+        ),
+        AddressingMode::Indirect_Y => format!(
+            "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
+            address,
+            mem_address.wrapping_sub(cpu.register_y as u16),
+            mem_address,
+            stored_value
+        ),
+        _ => unreachable!(
+            "unexpected addressing mode {:?} for instruction size 2",
+            mode
+        ),
+    }
+}
+
+fn format_three_byte_instruction(
+    cpu: &CPU,
+    begin: u16,
+    hex_dump: &mut Vec<u8>,
+    instruction: &Instruction,
+    mem_address: u16,
+    stored_value: u8,
+) -> String {
+    let address_lsb = cpu.mem_read(begin + 1);
+    let address_msb = cpu.mem_read(begin + 2);
+    hex_dump.push(address_lsb);
+    hex_dump.push(address_msb);
+
+    let address = cpu.mem_read_u16(begin + 1);
+
+    if instruction.none_addressing {
+        if instruction.opcode == 0x6c {
+            //jmp indirect
+            let jmp_addr = if address & 0x00FF == 0x00FF {
+                let lo = cpu.mem_read(address);
+                let hi = cpu.mem_read(address & 0xFF00);
+                (hi as u16) << 8 | (lo as u16)
+            } else {
+                cpu.mem_read_u16(address)
+            };
+
+            return format!("(${:04x}) = {:04x}", address, jmp_addr);
+        } else {
+            return format!("${:04x}", mem_address);
+        }
+    }
+
+    match instruction.mode {
+        AddressingMode::Indirect => {
+            //jmp indirect
+            let jmp_addr = if address & 0x00FF == 0x00FF {
+                let lo = cpu.mem_read(address);
+                let hi = cpu.mem_read(address & 0xFF00);
+                (hi as u16) << 8 | (lo as u16)
+            } else {
+                cpu.mem_read_u16(address)
+            };
+
+            // let jmp_addr = cpu.mem_read_u16(address);
+            format!("(${:04x}) = {:04x}", address, jmp_addr)
+        }
+        AddressingMode::Absolute => {
+            format!("${:04x} = {:02x}", mem_address, stored_value)
+        }
+        AddressingMode::Absolute_X => format!(
+            "${:04x},X @ {:04x} = {:02x}",
+            address, mem_address, stored_value
+        ),
+        AddressingMode::Absolute_Y => format!(
+            "${:04x},Y @ {:04x} = {:02x}",
+            address, mem_address, stored_value
+        ),
+        _ => panic!(
+            "unexpected addressing mode {:?} has ops-len 3. code {:02x}",
+            instruction.mode, instruction.opcode
+        ),
+    }
 }
 
 #[cfg(test)]
