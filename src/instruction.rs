@@ -119,6 +119,7 @@ pub enum Mnemonic {
     USBC,
     DCP,
     ISB,
+    SLO,
     UNKOWN,
 }
 
@@ -187,6 +188,7 @@ impl fmt::Display for Mnemonic {
             Mnemonic::USBC => "*SBC",
             Mnemonic::DCP => "*DCP",
             Mnemonic::ISB => "*ISB",
+            Mnemonic::SLO => "*SLO",
             Mnemonic::UNKOWN => "UNKNOWN",
         };
 
@@ -1815,6 +1817,63 @@ impl From<u8> for Instruction {
             0xF3 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::ISB,
+                mode: AddressingMode::Indirect_Y,
+                none_addressing: false,
+                size: 2,
+                cycles: 8,
+            },
+            // SLO
+            0x07 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
+                mode: AddressingMode::ZeroPage,
+                none_addressing: false,
+                size: 2,
+                cycles: 5,
+            },
+            0x17 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
+                mode: AddressingMode::ZeroPage_X,
+                none_addressing: false,
+                size: 2,
+                cycles: 6,
+            },
+            0x0F => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
+                mode: AddressingMode::Absolute,
+                none_addressing: false,
+                size: 3,
+                cycles: 6,
+            },
+            0x1F => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
+                mode: AddressingMode::Absolute_X,
+                none_addressing: false,
+                size: 3,
+                cycles: 7,
+            },
+            0x1B => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
+                mode: AddressingMode::Absolute_Y,
+                none_addressing: false,
+                size: 3,
+                cycles: 7,
+            },
+            0x03 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
+                mode: AddressingMode::Indirect_X,
+                none_addressing: false,
+                size: 2,
+                cycles: 8,
+            },
+            0x13 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::SLO,
                 mode: AddressingMode::Indirect_Y,
                 none_addressing: false,
                 size: 2,

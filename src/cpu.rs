@@ -460,6 +460,11 @@ impl CPU {
                 0xe7 | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3 => {
                     self.isb(opcode);
                 }
+                // SLO
+                0x07 | 0x17 | 0x0F | 0x1F | 0x1B | 0x03 | 0x13 => {
+                    self.slo(opcode);
+                }
+
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
             }
@@ -632,8 +637,9 @@ impl CPU {
     /// - **Carry (C)**: Set if bit 7 of the operand was set before the shift.
     /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
     /// - **Negative (N)**: Set if the result has its most significant bit set.
-    fn asl(&mut self, opcode: u8) {
+    fn asl(&mut self, opcode: u8) -> u8 {
         let instruction = Instruction::from(opcode);
+        let data: u8;
         match instruction.mode {
             // Shift accumulator
             AddressingMode::Accumulator => {
@@ -645,6 +651,8 @@ impl CPU {
 
                 // Set Zero and Negative flags based on the result.
                 self.set_zero_and_negative_flags(self.register_a);
+
+                data = self.register_a;
             }
             // Shift memory operand
             _ => {
@@ -660,10 +668,14 @@ impl CPU {
 
                 // Set Zero and Negative flags based on the result.
                 self.set_zero_and_negative_flags(res);
+
+                data = res;
             }
         }
 
         self.update_program_counter(&instruction);
+
+        data
     }
 
     /// Branch (BCC, BCS, BEQ, etc.) - Updates the program counter if a condition is met (based on a flag status).
@@ -1461,6 +1473,15 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let data = self.inc(opcode);
         self.reg_a_complemtent_sub(data);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn slo(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let data = self.asl(opcode);
+        self.register_a |= data;
+        self.set_zero_and_negative_flags(self.register_a);
 
         self.update_program_counter(&instruction);
     }
