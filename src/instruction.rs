@@ -122,6 +122,7 @@ pub enum Mnemonic {
     SLO,
     RLA,
     SRE,
+    RRA,
     UNKOWN,
 }
 
@@ -193,6 +194,7 @@ impl fmt::Display for Mnemonic {
             Mnemonic::SLO => "*SLO",
             Mnemonic::RLA => "*RLA",
             Mnemonic::SRE => "*SRE",
+            Mnemonic::RRA => "*RRA",
             Mnemonic::UNKOWN => "UNKNOWN",
         };
 
@@ -1992,6 +1994,63 @@ impl From<u8> for Instruction {
             0x53 => Instruction {
                 opcode,
                 mnemonic: Mnemonic::SRE,
+                mode: AddressingMode::Indirect_Y,
+                none_addressing: false,
+                size: 2,
+                cycles: 8,
+            },
+            // RRA
+            0x67 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
+                mode: AddressingMode::ZeroPage,
+                none_addressing: false,
+                size: 2,
+                cycles: 5,
+            },
+            0x77 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
+                mode: AddressingMode::ZeroPage_X,
+                none_addressing: false,
+                size: 2,
+                cycles: 6,
+            },
+            0x6F => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
+                mode: AddressingMode::Absolute,
+                none_addressing: false,
+                size: 3,
+                cycles: 6,
+            },
+            0x7F => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
+                mode: AddressingMode::Absolute_X,
+                none_addressing: false,
+                size: 3,
+                cycles: 7,
+            },
+            0x7B => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
+                mode: AddressingMode::Absolute_Y,
+                none_addressing: false,
+                size: 3,
+                cycles: 7,
+            },
+            0x63 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
+                mode: AddressingMode::Indirect_X,
+                none_addressing: false,
+                size: 2,
+                cycles: 8,
+            },
+            0x73 => Instruction {
+                opcode,
+                mnemonic: Mnemonic::RRA,
                 mode: AddressingMode::Indirect_Y,
                 none_addressing: false,
                 size: 2,

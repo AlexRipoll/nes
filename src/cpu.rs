@@ -472,6 +472,10 @@ impl CPU {
                 0x47 | 0x57 | 0x4F | 0x5f | 0x5b | 0x43 | 0x53 => {
                     self.sre(opcode);
                 }
+                // RRA
+                0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73 => {
+                    self.rra(opcode);
+                }
 
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
@@ -596,8 +600,14 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let address = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
+        self.reg_a_complemtent_add(operand);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn reg_a_complemtent_add(&mut self, data: u8) {
         let res = self.register_a as u16
-            + operand as u16
+            + data as u16
             + (self.status & StatusFlag::Carry.to_mask()) as u16;
 
         // set Carry flag
@@ -609,15 +619,13 @@ impl CPU {
         // set Overflow flag
         self.set_flag_conditionally(
             StatusFlag::Overflow,
-            (operand ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0,
+            (data ^ res as u8) & (res as u8 ^ self.register_a) & 0x80 != 0,
         );
 
         // set Negative flag
         self.set_flag_conditionally(StatusFlag::Negative, res as u8 & 0x80 != 0);
 
         self.register_a = res as u8;
-
-        self.update_program_counter(&instruction);
     }
 
     /// AND - Performs a bitwise AND between the accumulator (A) and the memory operand.
@@ -1211,8 +1219,9 @@ impl CPU {
     /// - **Carry (C)**: Set if the least significant bit (bit 0) of the operand was set before the rotation.
     /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
     /// - **Negative (N)**: Set if the result has its most significant bit set.
-    fn ror(&mut self, opcode: u8) {
+    fn ror(&mut self, opcode: u8) -> u8 {
         let instruction = Instruction::from(opcode);
+        let data: u8;
         match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_accumulator = self.register_a;
@@ -1220,6 +1229,7 @@ impl CPU {
                 self.copy_bit_from(old_accumulator, StatusFlag::Carry);
 
                 self.set_zero_and_negative_flags(self.register_a);
+                data = self.register_a;
             }
             _ => {
                 let address = self.operand_address(&instruction.mode);
@@ -1230,10 +1240,13 @@ impl CPU {
                 self.mem_write(address, rotated_operand);
 
                 self.set_zero_and_negative_flags(rotated_operand);
+                data = rotated_operand;
             }
         }
 
         self.update_program_counter(&instruction);
+
+        data
     }
 
     /// RTI (Return from Interrupt) - Restores the processor state from the stack.
@@ -1518,6 +1531,14 @@ impl CPU {
         let data = self.lsr(opcode);
         self.register_a ^= data;
         self.set_zero_and_negative_flags(self.register_a);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn rra(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let data = self.ror(opcode);
+        self.reg_a_complemtent_add(data);
 
         self.update_program_counter(&instruction);
     }
