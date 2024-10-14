@@ -464,6 +464,10 @@ impl CPU {
                 0x07 | 0x17 | 0x0F | 0x1F | 0x1B | 0x03 | 0x13 => {
                     self.slo(opcode);
                 }
+                // RLA
+                0x27 | 0x37 | 0x2F | 0x3F | 0x3B | 0x33 | 0x23 => {
+                    self.rla(opcode);
+                }
 
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
@@ -1162,8 +1166,9 @@ impl CPU {
     /// - **Carry (C)**: Set if the most significant bit (bit 7) of the operand was set before the rotation.
     /// - **Zero (Z)**: Set if the result is zero, cleared otherwise.
     /// - **Negative (N)**: Set if the result has its most significant bit set.
-    fn rol(&mut self, opcode: u8) {
+    fn rol(&mut self, opcode: u8) -> u8 {
         let instruction = Instruction::from(opcode);
+        let data: u8;
         match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_accumulator = self.register_a;
@@ -1171,6 +1176,7 @@ impl CPU {
                 self.copy_bit_from(old_accumulator >> 7, StatusFlag::Carry);
 
                 self.set_zero_and_negative_flags(self.register_a);
+                data = self.register_a;
             }
             _ => {
                 let address = self.operand_address(&instruction.mode);
@@ -1181,10 +1187,13 @@ impl CPU {
                 self.mem_write(address, rotated_operand);
 
                 self.set_zero_and_negative_flags(rotated_operand);
+                data = rotated_operand;
             }
         }
 
         self.update_program_counter(&instruction);
+
+        data
     }
 
     /// ROR (Rotate Right) - Rotates the bits in the operand to the right. Bit 0 goes into the Carry flag.
@@ -1481,6 +1490,15 @@ impl CPU {
         let instruction = Instruction::from(opcode);
         let data = self.asl(opcode);
         self.register_a |= data;
+        self.set_zero_and_negative_flags(self.register_a);
+
+        self.update_program_counter(&instruction);
+    }
+
+    fn rla(&mut self, opcode: u8) {
+        let instruction = Instruction::from(opcode);
+        let data = self.rol(opcode);
+        self.register_a &= data;
         self.set_zero_and_negative_flags(self.register_a);
 
         self.update_program_counter(&instruction);
