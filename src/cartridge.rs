@@ -7,7 +7,7 @@ const HEADER_SIZE: usize = 16;
 const TRAINER_SIZE: usize = 512;
 
 #[derive(Debug)]
-enum Mirroring {
+pub enum Mirroring {
     Horizontal,
     Vertical,
     FourScreen,

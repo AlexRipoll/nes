@@ -13,6 +13,7 @@ mod bus;
 mod cartridge;
 mod cpu;
 mod instruction;
+mod ppu;
 mod trace;
 
 fn main() -> Result<(), String> {
