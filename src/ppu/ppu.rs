@@ -1,6 +1,6 @@
 use crate::cartridge::Mirroring;
 
-use super::register::{address::PPUAddr, controller::PPUCtrl};
+use super::register::{address::PPUAddr, controller::PPUCtrl, mask::PPUMask};
 
 #[derive(Debug)]
 struct PPU {
@@ -12,6 +12,7 @@ struct PPU {
 
     addr: PPUAddr,
     ctrl: PPUCtrl,
+    mask: PPUMask,
 }
 
 impl PPU {
@@ -24,6 +25,7 @@ impl PPU {
             mirroring,
             addr: PPUAddr::new(),
             ctrl: PPUCtrl::new(),
+            mask: PPUMask::new(),
         }
     }
 }
