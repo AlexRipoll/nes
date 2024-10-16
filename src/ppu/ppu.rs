@@ -1,5 +1,7 @@
 use crate::cartridge::Mirroring;
 
+use super::register::{address::PPUAddr, controller::PPUCtrl};
+
 #[derive(Debug)]
 struct PPU {
     chr_rom: Vec<u8>,        // 8 KB pattern mem (contains the sprites)
@@ -7,6 +9,9 @@ struct PPU {
     palette_table: [u8; 32], // colors
     oam_data: [u8; 256],
     mirroring: Mirroring,
+
+    addr: PPUAddr,
+    ctrl: PPUCtrl,
 }
 
 impl PPU {
@@ -17,6 +22,8 @@ impl PPU {
             vram: [0u8; 2048],
             oam_data: [0u8; 256],
             mirroring,
+            addr: PPUAddr::new(),
+            ctrl: PPUCtrl::new(),
         }
     }
 }

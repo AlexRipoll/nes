@@ -1,13 +1,19 @@
 #[derive(Debug)]
-struct PPUAddr {
+pub struct PPUAddr {
     address: u16,
     latch: bool,
 }
 
 impl PPUAddr {
+    pub fn new() -> Self {
+        Self {
+            address: 0,
+            latch: false,
+        }
+    }
     /// Writes a byte to the PPUAddr register.
     /// Alternates between setting the high byte and low byte.
-    fn write(&mut self, data: u8) {
+    pub fn write(&mut self, data: u8) {
         if !self.latch {
             // First write: set high byte (upper 7 bits, bits 8-14)
             // Preserve lower 8 bits and update upper bits
