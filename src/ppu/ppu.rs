@@ -1,6 +1,8 @@
 use crate::cartridge::Mirroring;
 
-use super::register::{address::PPUAddr, controller::PPUCtrl, mask::PPUMask, status::PPUStatus};
+use super::register::{
+    address::PPUAddr, controller::PPUCtrl, mask::PPUMask, scroll::PPUScroll, status::PPUStatus,
+};
 
 #[derive(Debug)]
 struct PPU {
@@ -10,10 +12,11 @@ struct PPU {
     oam_data: [u8; 256],
     mirroring: Mirroring,
 
-    addr: PPUAddr,
     ctrl: PPUCtrl,
     mask: PPUMask,
     status: PPUStatus,
+    scroll: PPUScroll,
+    addr: PPUAddr,
 }
 
 impl PPU {
@@ -24,10 +27,11 @@ impl PPU {
             vram: [0u8; 2048],
             oam_data: [0u8; 256],
             mirroring,
-            addr: PPUAddr::new(),
             ctrl: PPUCtrl::new(),
             mask: PPUMask::new(),
             status: PPUStatus::new(),
+            scroll: PPUScroll::new(),
+            addr: PPUAddr::new(),
         }
     }
 }
