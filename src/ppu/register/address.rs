@@ -35,7 +35,11 @@ impl PPUAddr {
 
     /// Increments the VRAM address by a given value (for example, 1 or 32).
     /// The address wraps around to 15 bits (VRAM address space).
-    pub fn increment(&mut self, increment_value: u16) {
-        self.address = (self.address + increment_value) & 0x3FFF; // Wraps around the 15-bit space
+    pub fn increment(&mut self, increment_value: u8) {
+        self.address = (self.address + increment_value as u16) & 0x3FFF; // Wraps around the 15-bit space
+    }
+
+    pub fn reset_latch(&mut self) {
+        self.latch = false;
     }
 }

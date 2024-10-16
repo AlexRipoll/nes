@@ -30,7 +30,7 @@ impl PPUCtrl {
         Self { register: 0 }
     }
 
-    pub fn set(&mut self, data: u8) {
+    pub fn write(&mut self, data: u8) {
         self.register = data;
     }
 

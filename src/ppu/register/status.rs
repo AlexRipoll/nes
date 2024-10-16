@@ -36,7 +36,7 @@
 ///
 /// The **PPUStatus** register is read-only from the CPU's perspective, and the
 /// PPU clears the VBlank flag immediately after the CPU reads the register.
-#[derive(Default)]
+#[derive(Debug)]
 pub struct PPUStatus {
     pub register: u8, // 8-bit status register
 }

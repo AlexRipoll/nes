@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct PPUScroll {
     pub scroll_x: u8,
     pub scroll_y: u8,
@@ -6,7 +7,7 @@ pub struct PPUScroll {
 
 impl PPUScroll {
     pub fn new() -> Self {
-        ScrollRegister {
+        Self {
             scroll_x: 0,
             scroll_y: 0,
             latch: false,
