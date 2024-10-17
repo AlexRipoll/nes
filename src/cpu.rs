@@ -480,6 +480,7 @@ impl CPU {
                 // _ => panic!("Opcode not supported {:X}", opcode),
                 _ => eprintln!("Unofficial opcode {:X} not implemented yet", opcode),
             }
+            self.bus.tick(Instruction::from(opcode).cycles);
         }
     }
 
@@ -501,7 +502,7 @@ impl CPU {
     ///
     /// For detailed information on addressing modes, see:
     /// [6502 Addressing Modes](https://www.nesdev.org/obelisk-6502-guide/addressing.html)
-    pub fn operand_address(&self, mode: &AddressingMode) -> u16 {
+    pub fn operand_address(&self, mode: &AddressingMode) -> (u16, bool) {
         match mode {
             //  specail cases, must be handled separately
             AddressingMode::Implied | AddressingMode::Accumulator => unreachable!(),
@@ -509,31 +510,31 @@ impl CPU {
         }
     }
 
-    pub fn absolute_address(&self, mode: &AddressingMode, address: u16) -> u16 {
+    pub fn absolute_address(&self, mode: &AddressingMode, address: u16) -> (u16, bool) {
         match mode {
-            AddressingMode::Immediate => self.program_counter,
-            AddressingMode::ZeroPage => self.mem_read(address) as u16,
+            AddressingMode::Immediate => (self.program_counter, false),
+            AddressingMode::ZeroPage => (self.mem_read(address) as u16, false),
             AddressingMode::ZeroPage_X => {
                 let operand = self.mem_read(address);
                 let address = operand.wrapping_add(self.register_x) as u16;
-                address
+                (address, false)
             }
             AddressingMode::ZeroPage_Y => {
                 let operand = self.mem_read(address);
                 let address = operand.wrapping_add(self.register_y) as u16;
-                address
+                (address, false)
             }
-            AddressingMode::Relative => self.mem_read(address) as u16,
-            AddressingMode::Absolute => self.mem_read_u16(address),
+            AddressingMode::Relative => (self.mem_read(address) as u16, false),
+            AddressingMode::Absolute => (self.mem_read_u16(address), false),
             AddressingMode::Absolute_X => {
                 let operand = self.mem_read_u16(address);
                 let address = operand.wrapping_add(self.register_x as u16);
-                address
+                (address, page_cross(operand, address))
             }
             AddressingMode::Absolute_Y => {
                 let operand = self.mem_read_u16(address);
                 let address = operand.wrapping_add(self.register_y as u16);
-                address
+                (address, page_cross(operand, address))
             }
             // The original 6502 CPU has a bug when fetching the target address in indirect jumps if the pointer falls on a page
             // boundary (e.g., addresses ending with $FF, such as $xxFF, where xx can be any value from $00 to $FF). In these cases,
@@ -550,7 +551,7 @@ impl CPU {
                     self.mem_read_u16(operand)
                 };
 
-                address
+                (address, false)
             }
             AddressingMode::Indirect_X => {
                 let operand = self.mem_read(address);
@@ -558,16 +559,16 @@ impl CPU {
                 let ptr: u8 = (operand as u8).wrapping_add(self.register_x);
                 let lsb = self.mem_read(ptr as u16);
                 let msb = self.mem_read(ptr.wrapping_add(1) as u16);
-                (msb as u16) << 8 | (lsb as u16)
+                ((msb as u16) << 8 | (lsb as u16), false)
             }
             AddressingMode::Indirect_Y => {
                 let operand = self.mem_read(address);
 
                 let lsb = self.mem_read(operand as u16);
                 let msb = self.mem_read((operand as u8).wrapping_add(1) as u16);
-                let address = (msb as u16) << 8 | (lsb as u16);
-                let address = address.wrapping_add(self.register_y as u16);
-                address
+                let base = (msb as u16) << 8 | (lsb as u16);
+                let address = base.wrapping_add(self.register_y as u16);
+                (address, page_cross(base, address))
             }
             _ => panic!("mode {:?} not supported", mode),
         }
@@ -588,6 +589,10 @@ impl CPU {
     }
 }
 
+fn page_cross(address1: u16, address2: u16) -> bool {
+    address1 & 0xFF00 != address2 & 0xFF00
+}
+
 impl CPU {
     /// ADC (Add with Carry) - Adds the operand and the carry flag to the accumulator (A).
     ///
@@ -598,9 +603,12 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set (indicating a negative value in two's complement).
     fn adc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
         self.reg_a_complemtent_add(operand);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -635,7 +643,7 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn and(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         // Perform bitwise AND between A and the operand.
@@ -643,6 +651,9 @@ impl CPU {
 
         // Set Zero and Negative flags based on the result.
         self.set_zero_and_negative_flags(self.register_a);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -672,7 +683,7 @@ impl CPU {
             }
             // Shift memory operand
             _ => {
-                let address = self.operand_address(&instruction.mode);
+                let (address, _) = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 // Update Carry flag if bit 7 of the operand is set.
@@ -699,12 +710,18 @@ impl CPU {
     /// **Flags affected**: None (branches do not affect processor flags).
     fn branch(&mut self, opcode: u8, condition: bool) {
         let instruction = Instruction::from(opcode);
-        let offset = self.operand_address(&instruction.mode) as i8;
+        let (offset, _) = self.operand_address(&instruction.mode);
+        let offset = offset as u8;
+        let starting_pc = self.program_counter;
         self.update_program_counter(&instruction);
 
         // If the branch condition is met, update the program counter.
         if condition {
             self.program_counter = self.program_counter.wrapping_add(offset as u16);
+            self.bus.tick(1);
+            if starting_pc.wrapping_add(1) & 0xFF00 != self.program_counter & 0xFF00 {
+                self.bus.tick(1);
+            }
         }
     }
 
@@ -737,7 +754,7 @@ impl CPU {
     /// - **Negative (N)**: Set to bit 7 of the memory operand.
     fn bit(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         // Update Zero flag based on the result of A & M.
@@ -849,13 +866,16 @@ impl CPU {
     /// - **Negative (N)**: Set if the result of the subtraction (register - operand) is negative.
     fn compare(&mut self, opcode: u8, register: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.set_flag_conditionally(StatusFlag::Carry, register >= operand);
         self.set_flag_conditionally(StatusFlag::Zero, register == operand);
 
         self.copy_bit_from(register.wrapping_sub(operand), StatusFlag::Negative);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -898,7 +918,7 @@ impl CPU {
     /// - **Negative (N)**: Set if the result of Y - operand is negative.
     fn dec(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         let res = operand.wrapping_sub(1);
@@ -944,12 +964,15 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn eor(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.register_a ^= operand;
 
         self.set_zero_and_negative_flags(self.register_a);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -961,7 +984,7 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn inc(&mut self, opcode: u8) -> u8 {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         let res = operand.wrapping_add(1);
@@ -1005,7 +1028,7 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation.
     fn jmp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
 
         self.program_counter = address;
     }
@@ -1015,7 +1038,7 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation.
     fn jsr(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let subroutine_address = self.operand_address(&instruction.mode);
+        let (subroutine_address, _) = self.operand_address(&instruction.mode);
 
         self.stack_push_u16(self.program_counter + 2 - 1);
 
@@ -1029,11 +1052,14 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn lda(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_a = value;
 
         self.set_zero_and_negative_flags(self.register_a);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -1045,11 +1071,14 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ldx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_x = value;
 
         self.set_zero_and_negative_flags(self.register_x);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -1061,11 +1090,14 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ldy(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let value = self.mem_read(address);
         self.register_y = value;
 
         self.set_zero_and_negative_flags(self.register_y);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -1088,7 +1120,7 @@ impl CPU {
                 data = self.register_a;
             }
             _ => {
-                let address = self.operand_address(&instruction.mode);
+                let (address, _) = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 self.set_flag_conditionally(StatusFlag::Carry, operand & 0b0000_0001 != 0);
@@ -1119,12 +1151,15 @@ impl CPU {
     /// - **Negative (N)**: Set if the result has its most significant bit set.
     fn ora(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.register_a |= operand;
 
         self.set_zero_and_negative_flags(self.register_a);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -1196,7 +1231,7 @@ impl CPU {
                 data = self.register_a;
             }
             _ => {
-                let address = self.operand_address(&instruction.mode);
+                let (address, _) = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 let rotated_operand = (operand << 1) | (self.status & 0b0000_0001);
@@ -1232,7 +1267,7 @@ impl CPU {
                 data = self.register_a;
             }
             _ => {
-                let address = self.operand_address(&instruction.mode);
+                let (address, _) = self.operand_address(&instruction.mode);
                 let operand = self.mem_read(address);
 
                 let rotated_operand = (operand >> 1) | ((self.status & 0b0000_0001) << 7);
@@ -1284,10 +1319,13 @@ impl CPU {
     /// - **Overflow (V)**: Set if the signed overflow occurred (i.e., subtracting a negative number resulted in a positive result).
     fn sbc(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, page_crossed) = self.operand_address(&instruction.mode);
         let operand = self.mem_read(address);
 
         self.reg_a_complemtent_sub(operand);
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
@@ -1350,7 +1388,7 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation.
     fn sta(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_a);
 
         self.update_program_counter(&instruction);
@@ -1361,7 +1399,7 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation.
     fn stx(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_x);
 
         self.update_program_counter(&instruction);
@@ -1372,7 +1410,7 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation.
     fn sty(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let address = self.operand_address(&instruction.mode);
+        let (address, _) = self.operand_address(&instruction.mode);
         self.mem_write(address, self.register_y);
 
         self.update_program_counter(&instruction);
@@ -1454,16 +1492,19 @@ impl CPU {
 
     fn nop_read(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let addr = self.operand_address(&instruction.mode);
+        let (addr, page_crossed) = self.operand_address(&instruction.mode);
         let data = self.mem_read(addr);
         /* do nothing */
+        if page_crossed {
+            self.bus.tick(1);
+        }
 
         self.update_program_counter(&instruction);
     }
 
     fn lax(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let addr = self.operand_address(&instruction.mode);
+        let (addr, _) = self.operand_address(&instruction.mode);
         let data = self.mem_read(addr);
 
         self.register_a = data;
@@ -1475,7 +1516,7 @@ impl CPU {
 
     fn sax(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let addr = self.operand_address(&instruction.mode);
+        let (addr, _) = self.operand_address(&instruction.mode);
 
         let data = self.register_a & self.register_x;
         self.mem_write(addr, data);
@@ -1485,7 +1526,7 @@ impl CPU {
 
     fn dcp(&mut self, opcode: u8) {
         let instruction = Instruction::from(opcode);
-        let addr = self.operand_address(&instruction.mode);
+        let (addr, _) = self.operand_address(&instruction.mode);
 
         let mut data = self.mem_read(addr);
         data = data.wrapping_sub(1);

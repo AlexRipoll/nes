@@ -14,7 +14,7 @@ pub fn trace(cpu: &CPU) -> String {
     let (mem_address, stored_value) = match instruction.mode {
         AddressingMode::Implied | AddressingMode::Accumulator => (0, 0),
         _ => {
-            let address = cpu.absolute_address(&instruction.mode, begin + 1);
+            let (address, _) = cpu.absolute_address(&instruction.mode, begin + 1);
             (address, cpu.mem_read(address))
         }
     };

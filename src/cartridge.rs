@@ -16,9 +16,9 @@ pub enum Mirroring {
 #[derive(Debug)]
 pub struct Rom {
     pub prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
     mapper: u8,
-    screen_mirroring: Mirroring,
+    pub screen_mirroring: Mirroring,
 }
 
 impl Rom {

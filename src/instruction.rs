@@ -44,7 +44,7 @@ pub struct Instruction {
     /// This field represents how many cycles the instruction takes to complete.
     /// Different instructions can have varying cycle counts based on their complexity
     /// and the addressing modes used.
-    cycles: u8,
+    pub cycles: u8,
 }
 
 /// Represents the different CPU instructions (mnemonics) available on the 6502 processor.

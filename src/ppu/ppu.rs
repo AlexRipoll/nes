@@ -5,7 +5,7 @@ use super::register::{
 };
 
 #[derive(Debug)]
-struct PPU {
+pub struct PPU {
     chr_rom: Vec<u8>,        // 8 KB pattern mem (contains the sprites)
     vram: [u8; 2048],        // name table mem (layout of the background)
     palette_table: [u8; 32], // colors
@@ -19,11 +19,14 @@ struct PPU {
     scroll: PPUScroll,
     addr: PPUAddr,
 
+    cycles: usize,
+    scanline: u16,
     internal_data_buf: u8,
+    pub nmi_interrupt: Option<u8>,
 }
 
 impl PPU {
-    fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
         Self {
             chr_rom,
             palette_table: [0u8; 32],
@@ -37,7 +40,10 @@ impl PPU {
             scroll: PPUScroll::new(),
             addr: PPUAddr::new(),
 
+            cycles: 0,
+            scanline: 0,
             internal_data_buf: 0,
+            nmi_interrupt: None,
         }
     }
     pub fn new_empty_rom() -> Self {
@@ -155,6 +161,37 @@ impl PPU {
 
     fn increment_vram_addr(&mut self) {
         self.addr.increment(self.ctrl.vram_address_increment());
+    }
+
+    pub fn tick(&mut self, cycles: u8) -> bool {
+        self.cycles += cycles as usize;
+        if self.cycles >= 341 {
+            self.cycles = self.cycles - 341;
+            self.scanline += 1;
+
+            if self.scanline == 241 {
+                self.status.set_vblank();
+                self.status.clear_sprite_zero_hit();
+                if self.ctrl.generate_nmi_on_vblank() {
+                    self.nmi_interrupt = Some(1);
+                }
+            }
+
+            if self.scanline >= 262 {
+                self.scanline = 0;
+                self.nmi_interrupt = None;
+                self.status.clear_sprite_zero_hit();
+                self.status.clear_vblank();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn poll_nmi_interrupt(&mut self) -> Option<u8> {
+        self.nmi_interrupt.take()
     }
 }
 

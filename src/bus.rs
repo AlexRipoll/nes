@@ -1,6 +1,9 @@
 use std::usize;
 
-use crate::cartridge::{Rom, PRG_ROM_16KB_UNITS};
+use crate::{
+    cartridge::{Rom, PRG_ROM_16KB_UNITS},
+    ppu::ppu::PPU,
+};
 
 // Represents the start address of the RAM region in the memory map.
 const RAM_START_ADDRESS: u16 = 0x0000;
@@ -18,14 +21,18 @@ const PRG_ROM_END_ADDRESS: u16 = 0xFFFF;
 #[derive(Debug)]
 pub struct Bus {
     cpu_vram: [u8; 2048],
-    rom: Rom,
+    prg_rom: Vec<u8>,
+    ppu: PPU,
+    cycles: usize,
 }
 
 impl Bus {
     pub fn new(rom: Rom) -> Self {
         Bus {
             cpu_vram: [0; 2048],
-            rom,
+            prg_rom: rom.prg_rom,
+            ppu: PPU::new(rom.chr_rom, rom.screen_mirroring),
+            cycles: 0,
         }
     }
 
@@ -85,12 +92,21 @@ impl Bus {
     fn prg_rom_read(&self, mut address: u16) -> u8 {
         address -= 0x8000;
         // 0x4000 == 16_384 (PRG_ROM_16KB_UNITS)
-        if self.rom.prg_rom.len() == 0x4000 && address >= 0x4000 {
+        if self.prg_rom.len() == 0x4000 && address >= 0x4000 {
             // get mirrored data
             address = address % 0x4000;
         }
 
-        self.rom.prg_rom[address as usize]
+        self.prg_rom[address as usize]
+    }
+
+    pub fn tick(&mut self, cycles: u8) {
+        self.cycles += cycles as usize;
+        self.ppu.tick(cycles * 3);
+    }
+
+    pub fn poll_nmi_status(&mut self) -> Option<u8> {
+        self.ppu.nmi_interrupt.take()
     }
 }
 
