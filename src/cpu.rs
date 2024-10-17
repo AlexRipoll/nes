@@ -239,6 +239,10 @@ impl CPU {
         F: FnMut(&mut Self),
     {
         loop {
+            if let Some(_nmi) = self.bus.poll_nmi_status() {
+                self.interrupt(Interrupt::from(InterruptType::Nmi));
+            }
+
             callback(self);
 
             let opcode = self.mem_read(self.program_counter);
@@ -587,6 +591,74 @@ impl CPU {
             self.set_flag(StatusFlag::Negative);
         }
     }
+
+    /// Interrupt - Triggers a software interrupt by pushing the current state onto the stack and jumping to the interrupt vector.
+    ///
+    /// **Flags affected**:
+    /// - **Break (B)**: Set when BRK is executed.
+    /// - **Interrupt (I)**: Set after the interrupt is triggered.
+    fn interrupt(&mut self, interrupt: Interrupt) {
+        // Push the current PC (next instruction address) onto the stack.
+        self.stack_push_u16(self.program_counter);
+
+        // Push the processor status onto the stack (with Break flag set).
+        self.set_flag(StatusFlag::Break);
+        self.set_flag(StatusFlag::Unused); // Unused flag is always set to 1 as per 6502 conventions.
+        self.stack_push(self.status);
+        self.set_flag(StatusFlag::Interrupt);
+
+        self.bus.tick(interrupt.cpu_cycles);
+
+        // Set the program counter to the interrupt vector.
+        self.program_counter = self.mem_read_u16(interrupt.vector_address);
+    }
+}
+
+#[derive(Debug)]
+struct Interrupt {
+    kind: InterruptType,
+    vector_address: u16,
+    b_flag_mask: u8,
+    cpu_cycles: u8,
+}
+
+#[derive(Debug)]
+enum InterruptType {
+    Nmi,
+    Reset,
+    Irq,
+    Break,
+}
+
+impl From<InterruptType> for Interrupt {
+    fn from(kind: InterruptType) -> Self {
+        match kind {
+            InterruptType::Nmi => Interrupt {
+                kind: InterruptType::Nmi,
+                vector_address: 0xFFFA,
+                b_flag_mask: 0b00100000,
+                cpu_cycles: 2,
+            },
+            InterruptType::Reset => Interrupt {
+                kind: InterruptType::Reset,
+                vector_address: 0xFFFC,
+                b_flag_mask: 0b00100000,
+                cpu_cycles: 2,
+            },
+            InterruptType::Irq => Interrupt {
+                kind: InterruptType::Irq,
+                vector_address: 0xFFFE,
+                b_flag_mask: 0b00100000,
+                cpu_cycles: 2,
+            },
+            InterruptType::Break => Interrupt {
+                kind: InterruptType::Break,
+                vector_address: 0xFFFE,
+                b_flag_mask: 0b00100000,
+                cpu_cycles: 2,
+            },
+        }
+    }
 }
 
 fn page_cross(address1: u16, address2: u16) -> bool {
@@ -788,32 +860,6 @@ impl CPU {
     /// **Flags affected**: No flags are affected by this operation, but it may change the program counter.
     fn bpl(&mut self, opcode: u8) {
         self.branch(opcode, !self.is_flag_set(StatusFlag::Negative));
-    }
-
-    /// BRK (Force Interrupt) - Triggers a software interrupt by pushing the current state onto the stack and jumping to the interrupt vector.
-    ///
-    /// **Flags affected**:
-    /// - **Break (B)**: Set when BRK is executed.
-    /// - **Interrupt (I)**: Set after the interrupt is triggered.
-    fn brk(&mut self) {
-        // Push the current PC (next instruction address) onto the stack.
-        let pc_msb = (self.program_counter >> 8) as u8;
-        let pc_lsb = self.program_counter as u8;
-        self.stack_push(pc_msb);
-        self.stack_push(pc_lsb);
-
-        // Push the processor status onto the stack (with Break flag set).
-        self.set_flag(StatusFlag::Break);
-        self.set_flag(StatusFlag::Unused); // Unused flag is always set to 1 as per 6502 conventions.
-        self.stack_push(self.status);
-
-        // Fetch the interrupt vector address from $FFFE-$FFFF.
-        let irq_lsb = self.mem_read(0xFFFE);
-        let irq_msb = self.mem_read(0xFFFF);
-        let irq_vector = (irq_msb as u16) << 8 | (irq_lsb as u16);
-
-        // Set the program counter to the interrupt vector.
-        self.program_counter = irq_vector;
     }
 
     /// BVC (Branch if Overflow Clear) - Branches to the specified address if the Overflow flag is clear (0).

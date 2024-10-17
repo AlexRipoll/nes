@@ -51,7 +51,11 @@ impl PPU {
     }
 
     fn write_to_ctrl(&mut self, data: u8) {
+        let before_nmi_status = self.ctrl.generate_nmi_on_vblank();
         self.ctrl.write(data);
+        if !before_nmi_status && self.ctrl.generate_nmi_on_vblank() {
+            self.nmi_interrupt = Some(1);
+        }
     }
 
     fn write_to_mask(&mut self, data: u8) {
