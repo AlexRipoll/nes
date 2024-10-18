@@ -12,8 +12,10 @@ use trace::trace;
 mod bus;
 mod cartridge;
 mod cpu;
+mod frame;
 mod instruction;
 mod ppu;
+mod render;
 mod trace;
 
 fn main() -> Result<(), String> {
