@@ -27,8 +27,8 @@ impl PPUAddr {
         }
     }
 
-    /// Returns the current 15-bit VRAM address.
-    pub fn address(&self) -> u16 {
+    /// Returns the current 15-bit VRAM (name table) address.
+    pub fn vram_address(&self) -> u16 {
         // Mask to ensure 15-bit VRAM address
         self.address & 0x3FFF
     }
@@ -36,7 +36,8 @@ impl PPUAddr {
     /// Increments the VRAM address by a given value (for example, 1 or 32).
     /// The address wraps around to 15 bits (VRAM address space).
     pub fn increment(&mut self, increment_value: u8) {
-        self.address = (self.address + increment_value as u16) & 0x3FFF; // Wraps around the 15-bit space
+        self.address = self.address.wrapping_add(increment_value as u16) & 0x3FFF;
+        // Wraps around the 15-bit space
     }
 
     pub fn reset_latch(&mut self) {
