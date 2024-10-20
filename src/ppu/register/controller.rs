@@ -83,7 +83,7 @@ impl PPUCtrl {
         }
     }
 
-    /// Returns the sprite pattern table address (bit 3).
+    /// Returns the sprite pattern table address (for 8x8 sprites).
     /// This controls where the sprite pattern data is stored:
     /// - 0: Use pattern table at $0000
     /// - 1: Use pattern table at $1000
@@ -152,12 +152,12 @@ impl PPUCtrl {
     /// Returns true if NMI on VBlank is enabled (bit 7).
     /// - 0: Disable NMI
     /// - 1: Enable NMI on VBlank
-    pub fn generate_nmi_on_vblank(&self) -> bool {
+    pub fn vblank_nmi_enabled(&self) -> bool {
         self.register & 0b10000000 != 0
     }
 
     /// Set the NMI on VBlank flag (bit 7).
-    pub fn set_generate_nmi_on_vblank(&mut self, enable: bool) {
+    pub fn set_vblank_nmi(&mut self, enable: bool) {
         if enable {
             self.register |= 0b10000000; // Set bit 7
         } else {
