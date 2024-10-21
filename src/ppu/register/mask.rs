@@ -75,7 +75,7 @@ impl PPUMask {
     }
 
     /// Returns whether the PPU is currently in grayscale mode.
-    pub fn is_grayscale(&self) -> bool {
+    pub fn grayscale_enabled(&self) -> bool {
         self.register & 0b00000001 != 0 // Check if bit 0 is set
     }
 
@@ -83,7 +83,7 @@ impl PPUMask {
     /// - 0: Do not render background
     /// - 1: Render background
     /// Controls whether the background is rendered on the screen.
-    pub fn set_show_background(&mut self, enabled: bool) {
+    pub fn set_show_background_left_8(&mut self, enabled: bool) {
         if enabled {
             self.register |= 0b00000010; // Set bit 1
         } else {
@@ -92,7 +92,7 @@ impl PPUMask {
     }
 
     /// Returns whether the background is currently being rendered.
-    pub fn is_showing_background(&self) -> bool {
+    pub fn show_background_left_8_enabled(&self) -> bool {
         self.register & 0b00000010 != 0 // Check if bit 1 is set
     }
 
@@ -100,7 +100,7 @@ impl PPUMask {
     /// - 0: Do not render sprites
     /// - 1: Render sprites
     /// Controls whether sprites are rendered on the screen.
-    pub fn set_show_sprites(&mut self, enabled: bool) {
+    pub fn set_show_sprites_left_8(&mut self, enabled: bool) {
         if enabled {
             self.register |= 0b00000100; // Set bit 2
         } else {
@@ -109,7 +109,7 @@ impl PPUMask {
     }
 
     /// Returns whether sprites are currently being rendered.
-    pub fn is_showing_sprites(&self) -> bool {
+    pub fn show_sprites_left_8_enabled(&self) -> bool {
         self.register & 0b00000100 != 0 // Check if bit 2 is set
     }
 
@@ -117,7 +117,7 @@ impl PPUMask {
     /// - 0: Do not render the background in the leftmost 8 pixels
     /// - 1: Render the background in the leftmost 8 pixels
     /// Controls whether the background is rendered in the leftmost 8 pixels of the screen.
-    pub fn set_show_background_left(&mut self, enabled: bool) {
+    pub fn set_background_rendering(&mut self, enabled: bool) {
         if enabled {
             self.register |= 0b00001000; // Set bit 3
         } else {
@@ -126,7 +126,7 @@ impl PPUMask {
     }
 
     /// Returns whether the background is being rendered in the leftmost 8 pixels.
-    pub fn is_showing_background_left(&self) -> bool {
+    pub fn background_rendering_enabled(&self) -> bool {
         self.register & 0b00001000 != 0 // Check if bit 3 is set
     }
 
@@ -134,7 +134,7 @@ impl PPUMask {
     /// - 0: Do not render sprites in the leftmost 8 pixels
     /// - 1: Render sprites in the leftmost 8 pixels
     /// Controls whether sprites are rendered in the leftmost 8 pixels of the screen.
-    pub fn set_show_sprites_left(&mut self, enabled: bool) {
+    pub fn set_sprite_rendering(&mut self, enabled: bool) {
         if enabled {
             self.register |= 0b00010000; // Set bit 4
         } else {
@@ -143,7 +143,7 @@ impl PPUMask {
     }
 
     /// Returns whether sprites are being rendered in the leftmost 8 pixels.
-    pub fn is_showing_sprites_left(&self) -> bool {
+    pub fn sprite_rendering_enabled(&self) -> bool {
         self.register & 0b00010000 != 0 // Check if bit 4 is set
     }
 
@@ -160,7 +160,7 @@ impl PPUMask {
     }
 
     /// Returns whether the red color component is emphasized.
-    pub fn is_emphasizing_red(&self) -> bool {
+    pub fn emphasize_red_enabled(&self) -> bool {
         self.register & 0b00100000 != 0 // Check if bit 5 is set
     }
 
@@ -177,7 +177,7 @@ impl PPUMask {
     }
 
     /// Returns whether the green color component is emphasized.
-    pub fn is_emphasizing_green(&self) -> bool {
+    pub fn emphasize_green_enabled(&self) -> bool {
         self.register & 0b01000000 != 0 // Check if bit 6 is set
     }
 
@@ -194,7 +194,7 @@ impl PPUMask {
     }
 
     /// Returns whether the blue color component is emphasized.
-    pub fn is_emphasizing_blue(&self) -> bool {
+    pub fn emphasize_blue_enabled(&self) -> bool {
         self.register & 0b10000000 != 0 // Check if bit 7 is set
     }
 }
