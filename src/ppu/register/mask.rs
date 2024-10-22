@@ -58,6 +58,10 @@ impl PPUMask {
         Self { register: 0 }
     }
 
+    pub fn reset(&mut self) {
+        self.register = 0;
+    }
+
     pub fn write(&mut self, data: u8) {
         self.register = data;
     }

@@ -18,13 +18,12 @@ impl PPUAddr {
             // First write: set high byte (upper 7 bits, bits 8-14)
             // Preserve lower 8 bits and update upper bits
             self.address = (self.address & 0x00FF) | ((data as u16 & 0x3F) << 8);
-            self.latch = true;
         } else {
             // Second write: set low byte (bits 0-7)
             // Preserve upper 7 bits and update lower bits
             self.address = (self.address & 0x7F00) | data as u16;
-            self.latch = false;
         }
+        self.latch = !self.latch;
     }
 
     /// Returns the current 15-bit VRAM (name table) address.

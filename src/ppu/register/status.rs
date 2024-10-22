@@ -50,6 +50,10 @@ impl PPUStatus {
         Self { register: 0 }
     }
 
+    pub fn reset(&mut self) {
+        self.register = 0;
+    }
+
     /// Reads the PPUStatus register. This method will also clear the VBlank bit (bit 7).
     pub fn read(&mut self) -> u8 {
         let status = self.register;
