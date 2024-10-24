@@ -27,3 +27,20 @@ impl PPUScroll {
         self.latch = false;
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::ppu::scroll::PPUScroll;
+
+    #[test]
+    fn test_write_scroll() {
+        let mut s = PPUScroll::new();
+        s.write(0b10101_010);
+        assert_eq!(s.scroll_x, 0b10101_010);
+        assert_eq!(s.latch, true);
+
+        s.write(0b01010_101);
+        assert_eq!(s.scroll_y, 0b01010_101);
+        assert_eq!(s.latch, false);
+    }
+}
